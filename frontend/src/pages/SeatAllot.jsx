@@ -37,8 +37,9 @@ function SeatAllot() {
     }
     try {
       const res = await axios.get(
-        `http://localhost:8080/api/seats/student/${form.regNo}`,
-      );
+      `${import.meta.env.VITE_API_BASE_URL || "http://localhost:8080/api"}/seats/student/${form.regNo}`
+       );
+      //const res = await axios.get(`http://localhost:8080/api/seats/student/${form.regNo}`, );
       const data = res.data;
       setStudentInfo(data);
 
