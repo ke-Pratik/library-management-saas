@@ -1,0 +1,187 @@
+/* ═══════════════════════════════════════════════════ */
+/* Study Center Management System — Custom Styles     */
+/* ═══════════════════════════════════════════════════ */
+
+body {
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  margin: 0;
+  padding: 0;
+  background-color: #f0f2f5;
+}
+
+/* Sidebar */
+.sidebar {
+  width: 250px;
+  min-height: calc(100vh - 56px);
+  background-color: #1f2937;
+  color: #fff;
+  transition: all 0.3s;
+  overflow-y: auto;
+}
+
+.sidebar a {
+  color: #d1d5db;
+  text-decoration: none;
+  padding: 10px 20px;
+  display: block;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.sidebar a:hover,
+.sidebar a.active {
+  background-color: #374151;
+  color: #fff;
+  border-left: 3px solid #3b82f6;
+}
+
+.sidebar .section-title {
+  color: #9ca3af;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  padding: 15px 20px 5px;
+  font-weight: 600;
+}
+
+/* Main Content */
+.main-content {
+  overflow-y: auto;
+  max-height: calc(100vh - 56px);
+}
+
+/* Dashboard Cards */
+.dashboard-card {
+  border: none;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  transition: transform 0.2s;
+}
+
+.dashboard-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+}
+
+/* Seat Grid */
+.seat-box {
+  width: 50px;
+  height: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  transition: transform 0.2s;
+  border: 2px solid transparent;
+}
+
+.seat-box:hover {
+  transform: scale(1.15);
+  z-index: 1;
+}
+
+.seat-vacant {
+  background-color: #10b981;
+  color: #fff;
+}
+
+.seat-partial {
+  background-color: #f59e0b;
+  color: #fff;
+}
+
+.seat-occupied {
+  background-color: #ef4444;
+  color: #fff;
+}
+
+/* Zone Headers */
+.zone-boys {
+  background-color: #dbeafe;
+  border-left: 4px solid #3b82f6;
+}
+
+.zone-girls {
+  background-color: #fce7f3;
+  border-left: 4px solid #ec4899;
+}
+
+.zone-common {
+  background-color: #d1fae5;
+  border-left: 4px solid #10b981;
+}
+
+/* Status Badges */
+.badge-paid {
+  background-color: #10b981;
+  color: #fff;
+}
+
+.badge-pending {
+  background-color: #ef4444;
+  color: #fff;
+}
+
+.badge-partial {
+  background-color: #f59e0b;
+  color: #fff;
+}
+
+/* Page Title */
+.page-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1f2937;
+  margin-bottom: 20px;
+}
+
+/* Form Styling */
+.form-section {
+  background-color: #fff;
+  border-radius: 12px;
+  padding: 30px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+/* Result Card */
+.result-card {
+  border-radius: 12px;
+  border: 2px solid #e5e7eb;
+  background-color: #fff;
+  padding: 20px;
+}
+
+.result-card.success {
+  border-color: #10b981;
+  background-color: #f0fdf4;
+}
+
+.result-card.error {
+  border-color: #ef4444;
+  background-color: #fef2f2;
+}
+
+.result-card.warning {
+  border-color: #f59e0b;
+  background-color: #fffbeb;
+}
+
+/* Table */
+.table-custom {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.table-custom thead {
+  background-color: #1f2937;
+  color: #fff;
+}
+
+/* Navbar */
+.navbar-custom {
+  background-color: #1f2937 !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
