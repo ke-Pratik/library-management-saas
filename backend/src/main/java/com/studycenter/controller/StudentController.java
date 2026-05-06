@@ -56,9 +56,16 @@ public class StudentController {
     public ResponseEntity<StudentSummaryResponse> summary() {
         return ResponseEntity.ok(studentService.getStudentSummary());
     }
-
+    // Controller updated on 7 MAY
     @GetMapping("/search")
-    public ResponseEntity<List<StudentDetailResponse>> search(@RequestParam String name) {
-        return ResponseEntity.ok(studentService.searchByName(name));
+    public ResponseEntity<List<StudentDetailResponse>> search(
+            @RequestParam String type,
+            @RequestParam String value) {
+        return ResponseEntity.ok(studentService.searchStudents(type, value));
     }
+
+   // @GetMapping("/search")
+    //public ResponseEntity<List<StudentDetailResponse>> search(@RequestParam String name) {
+      //  return ResponseEntity.ok(studentService.searchByName(name));
+    //}
 }
