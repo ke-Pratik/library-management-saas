@@ -155,6 +155,44 @@ public class StudentService {
                 .build();
     }
 
+    // New Method Start 7 MAY
+                public List<StudentDetailResponse> searchStudents(String type, String value) {
+                
+                    log.info("Searching students: type={}, value={}", type, value);
+                
+                    if (type == null || type.trim().isEmpty()) {
+                        throw new InvalidRequestException("Search type cannot be empty.");
+                    }
+                
+                    if (value == null || value.trim().isEmpty()) {
+                        throw new InvalidRequestException("Search value cannot be empty.");
+                    }
+                
+                    String searchType = type.trim().toLowerCase();
+                    String searchValue = value.trim();
+                
+                    List<Student> students;
+                
+                    switch (searchType) {
+                        case "regno" -> {
+                            try {
+                                Long regNo = Long.parseLong(searchValue);
+                                students = studentRepository.searchActiveByRegNo(regNo);
+                            } catch (NumberFormatException ex) {
+                                throw new InvalidRequestException("Reg No must be a valid number.");
+                            }
+                        }
+                        case "mobile" -> students = studentRepository.searchActiveByMobile(searchValue);
+                        case "name" -> students = studentRepository.searchActiveByName(searchValue);
+                        default -> throw new InvalidRequestException("Invalid search type. Use regNo, mobile, or name.");
+                    }
+                
+                    return students.stream()
+                            .map(this::toDetailResponse)
+                            .toList();
+                }
+    // New Method End 7 MAY
+    // Not getting used eliminate in next deployment , due to new method added in 7 MAY
     public List<StudentDetailResponse> searchByName(String name) {
 
         log.info("Searching: name={}", name);
