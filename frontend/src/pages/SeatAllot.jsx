@@ -25,9 +25,11 @@ function SeatAllot() {
   const [searchLoading, setSearchLoading] = useState(false);
 
   // Search by name
-  const [searchName, setSearchName] = useState("");
+  const [studentSearchType, setStudentSearchType] = useState("name");
+  const [studentSearchValue, setStudentSearchValue] = useState("");
   const [searchResults, setSearchResults] = useState(null);
-  const [nameSearchLoading, setNameSearchLoading] = useState(false);
+  const [studentSearchLoading, setStudentSearchLoading] = useState(false);
+  const [isStudentSelected, setIsStudentSelected] = useState(false);
 
   // Fetch student info and auto-fill time
   const handleFetchStudent = async () => {
@@ -121,25 +123,31 @@ function SeatAllot() {
     }
   };
 
-  // Search by name
-  const handleNameSearch = async (e) => {
-    e.preventDefault();
-    if (!searchName.trim()) {
-      toast.error("Enter a name to search");
-      return;
-    }
-    setNameSearchLoading(true);
-    setSearchResults(null);
-    try {
-      const res = await searchStudents(searchName);
-      setSearchResults(res.data);
-      if (res.data.length === 0) toast.info("No students found with that name");
-    } catch (err) {
-      toast.error(err.response?.data?.message || "Search failed");
-    } finally {
-      setNameSearchLoading(false);
-    }
-  };
+  // Search by name,mob,reg
+ const handleStudentSearch = async (e) => {
+      e.preventDefault();
+    
+      if (!studentSearchValue.trim()) {
+        toast.error("Enter search value");
+        return;
+      }
+    
+      setStudentSearchLoading(true);
+      setSearchResults(null);
+    
+      try {
+        const res = await searchStudents(studentSearchType, studentSearchValue.trim());
+        setSearchResults(res.data);
+    
+        if (res.data.length === 0) {
+          toast.info("No active students found");
+        }
+      } catch (err) {
+        toast.error(err.response?.data?.message || "Search failed");
+      } finally {
+        setStudentSearchLoading(false);
+      }
+};
 
   // Quick select from search results
   const handleSelectStudent = (student) => {
@@ -155,7 +163,9 @@ function SeatAllot() {
       isActive: student.isActive,
     });
     setSearchResults(null);
+    setStudentSearchValue("");
     setSearchName("");
+    
 
     if (student.inTime && student.outTime) {
       toast.success(
@@ -172,28 +182,55 @@ function SeatAllot() {
     <div>
       <h2 className="page-title">🪑 Allot Seat to Student</h2>
 
-      {/* ─── SEARCH BY NAME ──────────────────────── */}
+      {/* ─── SEARCH BY NAME,MOBILE,REGNO ──────────────────────── */}
       <div className="form-section col-lg-8 mb-4">
-        <h5 className="fw-bold mb-2">🔍 Find Student by Name</h5>
+        <h5 className="fw-bold mb-2">🔍 Find Student</h5>
         <p className="text-muted small mb-3">
-          Don't know RegNo? Search by name and select.
+          Search active students by Reg No, Mobile No, or Name.
         </p>
 
-        <form onSubmit={handleNameSearch} className="d-flex gap-2 mb-3">
-          <input
-            type="text"
-            className="form-control"
-            placeholder="Type student name..."
-            value={searchName}
-            onChange={(e) => setSearchName(e.target.value)}
-          />
-          <button
-            type="submit"
-            className="btn btn-outline-primary px-4"
-            disabled={nameSearchLoading}
-          >
-            {nameSearchLoading ? "..." : "🔍 Search"}
-          </button>
+        <form onSubmit={handleStudentSearch} className="row g-2 mb-3">
+          <div className="col-md-3">
+            <select
+              className="form-select"
+              value={studentSearchType}
+              onChange={(e) => {
+                setStudentSearchType(e.target.value);
+                setStudentSearchValue("");
+                setSearchResults(null);
+              }}
+            >
+              <option value="name">Name</option>
+              <option value="regNo">Reg No</option>
+              <option value="mobile">Mobile No</option>
+            </select>
+          </div>
+
+          <div className="col-md-6">
+            <input
+              type={studentSearchType === "regNo" ? "number" : "text"}
+              className="form-control"
+              placeholder={
+                studentSearchType === "regNo"
+                  ? "Enter Reg No..."
+                  : studentSearchType === "mobile"
+                    ? "Enter mobile number..."
+                    : "Type partial student name..."
+              }
+              value={studentSearchValue}
+              onChange={(e) => setStudentSearchValue(e.target.value)}
+            />
+          </div>
+
+          <div className="col-md-3">
+            <button
+              type="submit"
+              className="btn btn-outline-primary w-100"
+              disabled={studentSearchLoading}
+            >
+              {studentSearchLoading ? "..." : "🔍 Search"}
+            </button>
+          </div>
         </form>
 
         {searchResults && searchResults.length > 0 && (
@@ -233,6 +270,7 @@ function SeatAllot() {
                     </td>
                     <td>
                       <button
+                        type="button"
                         className="btn btn-sm btn-primary"
                         onClick={() => handleSelectStudent(s)}
                       >
@@ -260,12 +298,14 @@ function SeatAllot() {
                   className="form-control"
                   value={form.regNo}
                   onChange={(e) => setForm({ ...form, regNo: e.target.value })}
+                  disabled={isStudentSelected}
                   required
                 />
                 <button
                   type="button"
                   className="btn btn-outline-secondary"
                   onClick={handleFetchStudent}
+                  disabled={isStudentSelected}
                 >
                   🔍
                 </button>
@@ -273,6 +313,25 @@ function SeatAllot() {
               <small className="text-muted">
                 Enter & click 🔍 to auto-fill time
               </small>
+              {isStudentSelected && (
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline-warning mt-2"
+                  onClick={() => {
+                    setIsStudentSelected(false);
+                    setForm({
+                      ...form,
+                      regNo: "",
+                      startTime: "",
+                      endTime: "",
+                    });
+                    setStudentInfo(null);
+                    setResult(null);
+                  }}
+                >
+                  Change Student
+                </button>
+              )}
             </div>
             <div className="col-md-3">
               <label className="form-label fw-bold">Seat No (1-65) *</label>
@@ -466,6 +525,7 @@ function SeatAllot() {
       )}
     </div>
   );
+       
 }
 
 export default SeatAllot;
