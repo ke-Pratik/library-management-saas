@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { checkSeatAvailability } from "../services/api";
+import { checkSeat } from "../services/api";
 import { toast } from "react-toastify";
 
 function SeatCheck() {
