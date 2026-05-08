@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { checkSeat } from "../services/api";
+import { checkSeatAvailability } from "../services/api";
 import { toast } from "react-toastify";
 
 function SeatCheck() {
@@ -17,7 +17,15 @@ function SeatCheck() {
     setLoading(true);
     setResult(null);
     try {
-      const res = await checkSeat(form);
+      const payload = {
+        gender: form.gender,
+        inTime: form.inTime,
+        outTime: form.outTime,
+      };
+      if (form.seatNo) {
+        payload.seatNo = form.seatNo;
+      }
+      const res = await checkSeatAvailability(payload);
       setResult(res.data);
     } catch (err) {
       toast.error(err.response?.data?.message || "Error checking seat");
@@ -32,7 +40,9 @@ function SeatCheck() {
       <div className="form-section col-lg-6">
         <form onSubmit={handleSubmit}>
           <div className="mb-3">
-            <label className="form-label fw-bold">Seat No (1-65)</label>
+            <label className="form-label fw-bold">
+              Seat No (1-65) Optional
+            </label>
             <input
               type="number"
               className="form-control"
@@ -40,7 +50,6 @@ function SeatCheck() {
               max="65"
               value={form.seatNo}
               onChange={(e) => setForm({ ...form, seatNo: e.target.value })}
-              required
             />
           </div>
           <div className="mb-3">
@@ -81,7 +90,39 @@ function SeatCheck() {
           </button>
         </form>
       </div>
-       {result && (
+      {/* VACANT SEATS RESULT */}
+      {result?.vacantSeats && (
+        <div className="result-card mt-4 success">
+          <h4 className="fw-bold mb-3">
+            ✅ {result.totalVacant} Vacant Seats Found
+          </h4>
+          <p className="mb-4">
+            <strong>Gender:</strong> {result.gender} | <strong>Slot:</strong>{" "}
+            {result.requestedSlot}
+          </p>
+
+          <div className="d-flex flex-wrap gap-3">
+            {result.vacantSeats.map((seat) => (
+              <div
+                key={seat.seatNo}
+                className={`text-white text-center rounded p-3 fw-bold ${
+                  seat.zone === "COMMON" ? "bg-success" : "bg-primary"
+                }`}
+                style={{
+                  width: "90px",
+                  minHeight: "75px",
+                }}
+              >
+                <div style={{ fontSize: "20px" }}>{seat.seatNo}</div>
+
+                <div style={{ fontSize: "10px" }}>{seat.zone}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {/* SINGLE SEAT RESULT */}
+      {result && !result.vacantSeats && (
         <div
           className={`result-card mt-4 ${
             result.available
@@ -107,7 +148,7 @@ function SeatCheck() {
             <strong>Message:</strong> {result.message}
           </p>
 
-          {/* NEW OCCUPIED SEAT DETAILS */}
+          {/* OCCUPIED SEAT DETAILS */}
           {!result.available && result.status !== "GENDER_NOT_ALLOWED" && (
             <div className="mt-3">
               <table className="table table-sm table-bordered">
@@ -142,6 +183,3 @@ function SeatCheck() {
 }
 
 export default SeatCheck;
-
-
-      
