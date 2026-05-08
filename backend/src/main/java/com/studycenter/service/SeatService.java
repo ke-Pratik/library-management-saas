@@ -40,8 +40,73 @@ public class SeatService {
         if (!start.isBefore(end))
             throw new InvalidRequestException("startTime must be before endTime");
     }
+      public SeatAvailabilityResponse checkSeatAvailability(int seatNo, String gender, LocalTime inTime, LocalTime outTime) {
 
-    public SeatAvailabilityResponse checkSeatAvailability(int seatNo, String gender, LocalTime inTime, LocalTime outTime) {
+        validateTimeRange(inTime, outTime);
+
+        if (seatNo < 1 || seatNo > seatConfig.getTotalSeats())
+            throw new InvalidRequestException("Seat must be between 1 and " + seatConfig.getTotalSeats());
+
+        String zone = seatConfig.getZoneLabel(seatNo);
+        boolean genderAllowed = seatConfig.isGenderAllowedOnSeat(seatNo, gender);
+        boolean isAvailable = !seatBookingRepository.existsBySeatNoAndStartTimeLessThanAndEndTimeGreaterThan(seatNo, outTime, inTime);
+
+        List<SeatBooking> bookings = seatBookingRepository.findBySeatNo(seatNo);
+
+        List<String> existingBookings = bookings.stream()
+                .map(b -> b.getStartTime().format(TIME_FMT) + " - " + b.getEndTime().format(TIME_FMT)
+                        + " (RegNo: " + b.getRegNo() + ")")
+                .toList();
+
+        String message;
+        SeatBooking occupiedBooking = bookings.stream()
+                .filter(b ->
+                        outTime.isAfter(b.getStartTime()) &&
+                                inTime.isBefore(b.getEndTime()))
+                .findFirst()
+                .orElse(null);
+        if (!genderAllowed) message = "Seat " + seatNo + " (" + zone + ") not allowed for " + gender;
+        else if (!isAvailable) message = "Seat " + seatNo + " is booked for overlapping time";
+        else message = "Seat " + seatNo + " is AVAILABLE for " + inTime.format(TIME_FMT) + " - " + outTime.format(TIME_FMT);
+        
+        String occupiedStudentName = null;
+        Long occupiedRegNo = null;
+
+        if (occupiedBooking != null) {
+
+            occupiedRegNo = occupiedBooking.getRegNo();
+
+            List<Student> students =
+                    studentRepository.searchActiveByRegNo(occupiedRegNo);
+
+            if (!students.isEmpty()) {
+                occupiedStudentName = students.get(0).getName();
+            }
+        }
+
+        return SeatAvailabilityResponse.builder()
+                .seatNo(seatNo)
+                .zone(zone)
+                .genderAllowed(genderAllowed)
+                .isAvailable(isAvailable && genderAllowed)
+                .message(message)
+                .existingBookings(existingBookings)
+                .studentName(occupiedStudentName)
+                .regNo(occupiedRegNo)
+                .occupiedTimeSlot(
+                        occupiedBooking != null
+                                ? occupiedBooking.getStartTime().format(TIME_FMT)
+                                + " - "
+                                + occupiedBooking.getEndTime().format(TIME_FMT)
+                                : null)
+                .bookingDate(
+                        occupiedBooking != null
+                                ? occupiedBooking.getBookingDate().toString()
+                                : null)
+                .build();
+    }
+
+    /*public SeatAvailabilityResponse checkSeatAvailability(int seatNo, String gender, LocalTime inTime, LocalTime outTime) {
 
         validateTimeRange(inTime, outTime);
 
@@ -67,7 +132,7 @@ public class SeatService {
                 .isAvailable(isAvailable && genderAllowed).message(message)
                 .existingBookings(existingBookings)
                 .build();
-    }
+    }*/
 
     public VacantSeatResponse getVacantSeats(String gender, LocalTime inTime, LocalTime outTime) {
 
@@ -224,4 +289,27 @@ public class SeatService {
                 .bookings(details)
                 .build();
     }
+    public Object getSeatAvailability(
+        String gender,
+        LocalTime inTime,
+        LocalTime outTime,
+        Integer seatNo) {
+
+    // If seatNo given → specific seat check
+    if (seatNo != null) {
+        return checkSeatAvailability(
+                seatNo,
+                gender,
+                inTime,
+                outTime
+        );
+    }
+
+    // Otherwise → all vacant seats
+    return getVacantSeats(
+            gender,
+            inTime,
+            outTime
+    );
+}
 }
