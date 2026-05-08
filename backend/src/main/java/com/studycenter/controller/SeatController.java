@@ -62,4 +62,23 @@ public class SeatController {
     public ResponseEntity<StudentBookingsResponse> studentBookings(@PathVariable Long regNo) {
         return ResponseEntity.ok(seatService.getStudentBookings(regNo));
     }
+
+    @GetMapping("/availability")
+public ResponseEntity<?> availability(
+        @RequestParam String gender,
+        @RequestParam @DateTimeFormat(pattern = "HH:mm") LocalTime inTime,
+        @RequestParam @DateTimeFormat(pattern = "HH:mm") LocalTime outTime,
+        @RequestParam(required = false) Integer seatNo) {
+
+    return ResponseEntity.ok(
+            seatService.getSeatAvailability(
+                    gender,
+                    inTime,
+                    outTime,
+                    seatNo
+            )
+    );
+}
+
+    
 }
