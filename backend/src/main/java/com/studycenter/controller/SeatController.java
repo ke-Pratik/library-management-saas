@@ -79,6 +79,4 @@ public ResponseEntity<?> availability(
             )
     );
 }
-
-    
 }
