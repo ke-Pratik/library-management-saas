@@ -27,6 +27,10 @@ public class FeeRecord {
     @Column(name = "reg_no", nullable = false)
     private Long regNo;
 
+    // Links to the config that was active when this record was created
+    @Column(name = "config_id")
+    private Long configId;
+
     @Column(name = "fee_month", nullable = false)
     private Integer feeMonth;
 
@@ -54,9 +58,14 @@ public class FeeRecord {
     @Column(name = "prorated_fee")
     private BigDecimal proratedFee;
 
+    // One-time admission fee — only > 0 for the very first month record
+    @Column(name = "admission_fee")
+    private BigDecimal admissionFee;
+
     @Column(name = "discount_amount")
     private BigDecimal discountAmount;
 
+    // final_fee = proratedFee + admissionFee - discountAmount
     @Column(name = "final_fee")
     private BigDecimal finalFee;
 
@@ -67,10 +76,10 @@ public class FeeRecord {
     private BigDecimal balanceAmount;
 
     @Column(name = "payment_status")
-    private String paymentStatus;
+    private String paymentStatus; // PENDING / PARTIAL / PAID
 
     @Column(name = "payment_mode")
-    private String paymentMode;
+    private String paymentMode; // CASH / ONLINE
 
     @Column(name = "payment_date")
     private LocalDate paymentDate;
