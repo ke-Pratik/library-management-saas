@@ -25,4 +25,6 @@ public class FeePreviewRequest {
     private LocalDate joiningDate;
 
     private BigDecimal discountAmount;
+
+    private BigDecimal admissionFee;   // optional, shown in preview if provided
 }
