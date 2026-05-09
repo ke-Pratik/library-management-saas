@@ -28,8 +28,8 @@ function StudentRegister() {
       const payload = {
         ...form,
         regNo: Number(form.regNo),
-        inTime: form.inTime || null,
-        outTime: form.outTime || null,
+        inTime: form.inTime,
+        outTime: form.outTime,
       };
       const res = await registerStudent(payload);
       toast.success(res.data.message || "Student registered!");
@@ -156,27 +156,27 @@ function StudentRegister() {
                 required
               />
             </div>
-            <div className="col-md-4">
-              <label className="form-label fw-bold">Preferred In Time</label>
+             <div className="col-md-4">
+              <label className="form-label fw-bold">In Time *</label>
               <input
                 type="time"
                 className="form-control"
                 name="inTime"
                 value={form.inTime}
                 onChange={handleChange}
+                required
               />
-              <small className="text-muted">Auto-used in seat allotment</small>
             </div>
             <div className="col-md-4">
-              <label className="form-label fw-bold">Preferred Out Time</label>
+              <label className="form-label fw-bold">Out Time *</label>
               <input
                 type="time"
                 className="form-control"
                 name="outTime"
                 value={form.outTime}
                 onChange={handleChange}
+                required
               />
-              <small className="text-muted">Auto-used in seat allotment</small>
             </div>
             <div className="col-12">
               <label className="form-label fw-bold">Address *</label>
