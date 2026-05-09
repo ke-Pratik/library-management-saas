@@ -39,6 +39,18 @@ public class FeeController {
         return new ResponseEntity<>(feeService.lockFee(req), HttpStatus.CREATED);
     }
 
+     // Auto-generate current month fee record from saved config
+    // Called by FeePayment page on student selection
+    @PostMapping("/auto-generate/{regNo}")
+    public ResponseEntity<?> autoGenerate(@PathVariable Long regNo) {
+        FeeCalculateResponse result = feeService.autoGenerateCurrentMonthFee(regNo);
+        if (result == null) {
+            // Record already existed — not an error
+            return ResponseEntity.ok(Map.of("message", "Fee record already exists for current month."));
+        }
+        return new ResponseEntity<>(result, HttpStatus.CREATED);
+    }
+
     @PostMapping("/pay")
     public ResponseEntity<FeePaymentResponse> pay(
             @Valid @RequestBody FeePaymentRequest req) {
