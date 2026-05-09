@@ -41,10 +41,13 @@ public class StudentService {
             throw new InvalidRequestException("Aadhaar " + request.getAadhaarNo() + " is already registered.");
 
         LocalDate admissionDate = LocalDate.parse(request.getDateOfAdmission());
-        LocalTime inTime = (request.getInTime() != null && !request.getInTime().isEmpty())
-                ? LocalTime.parse(request.getInTime()) : null;
-        LocalTime outTime = (request.getOutTime() != null && !request.getOutTime().isEmpty())
-                ? LocalTime.parse(request.getOutTime()) : null;
+        if (request.getInTime() == null || request.getInTime().isEmpty())
+            throw new InvalidRequestException("inTime is required");
+        if (request.getOutTime() == null || request.getOutTime().isEmpty())
+            throw new InvalidRequestException("outTime is required");
+
+        LocalTime inTime = LocalTime.parse(request.getInTime());
+        LocalTime outTime = LocalTime.parse(request.getOutTime());
 
         if (inTime != null && outTime != null && !inTime.isBefore(outTime))
             throw new InvalidRequestException("inTime must be before outTime");
