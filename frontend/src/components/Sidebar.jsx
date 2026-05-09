@@ -65,13 +65,6 @@ function Sidebar() {
       >
         <FaSearch className="me-2" /> Check Seat
       </NavLink>
-      <NavLink
-        to="/seats/vacant"
-        className={({ isActive }) => (isActive ? "active" : "")}
-      >
-        <FaListAlt className="me-2" /> Vacant Seats
-      </NavLink>
-
       <div className="section-title">💰 Fees</div>
       <NavLink
         to="/fees/calculate"
