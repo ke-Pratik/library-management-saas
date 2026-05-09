@@ -29,5 +29,7 @@ public class FeeLockRequest {
 
     private BigDecimal discountAmount;
 
+    private BigDecimal admissionFee;   // optional, null = 0 (only for first lock)
+
     private String remarks;
 }
