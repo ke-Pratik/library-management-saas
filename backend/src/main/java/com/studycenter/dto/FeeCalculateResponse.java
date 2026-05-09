@@ -26,6 +26,7 @@ public class FeeCalculateResponse {
     private String joiningDate;
     private BigDecimal monthlyFee;
     private BigDecimal proratedFee;
+    private BigDecimal admissionFee;      // one-time, first month only
     private BigDecimal monthlyDiscount;
     private BigDecimal proratedDiscount;
     private BigDecimal discountAmount;
