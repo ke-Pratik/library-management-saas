@@ -18,6 +18,11 @@ public class AuthController {
     private final JwtUtil jwtUtil;
     private final PasswordEncoder passwordEncoder;
 
+    @GetMapping("/health")
+  public String health() {
+    return "OK";
+    }
+
     @PostMapping("/login")
     public LoginResponse login(@RequestBody LoginRequest request) {
 
