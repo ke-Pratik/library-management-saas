@@ -31,44 +31,35 @@ function SeatAllot() {
   const [studentSearchLoading, setStudentSearchLoading] = useState(false);
   const [isStudentSelected, setIsStudentSelected] = useState(false);
 
-  // Fetch student info and auto-fill time
-  const handleFetchStudent = async () => {
-    if (!form.regNo) {
-      toast.error("Enter Reg No first");
-      return;
-    }
-    try {
-      const res = await axios.get(
-      `${import.meta.env.VITE_API_BASE_URL || "http://localhost:8080/api"}/seats/student/${form.regNo}`
-       );
-      //const res = await axios.get(`http://localhost:8080/api/seats/student/${form.regNo}`, );
-      const data = res.data;
-      setStudentInfo(data);
+   const handleFetchStudent = async () => {
+  if (!form.regNo) {
+    toast.error("Enter Reg No first");
+    return;
+  }
+  try {
+    const res = await API.get(`/seats/student/${form.regNo}`);
+    setStudentInfo(res.data);
 
-      // Try to get inTime/outTime from active students list
-      const stuRes = await axios.get(
-         `${import.meta.env.VITE_API_BASE_URL || "http://localhost:8080/api"}/students/active`
-      );
-    //  const stuRes = await axios.get("http://localhost:8080/api/students/active",);
-      const student = stuRes.data.find((s) => s.regNo === Number(form.regNo));
+    // Use search API to get the student's preferred time
+    const stuRes = await searchStudents("regno", form.regNo);
+    const student = stuRes.data[0];
 
-      if (student && student.inTime && student.outTime) {
-        setForm((prev) => ({
-          ...prev,
-          startTime: student.inTime,
-          endTime: student.outTime,
-        }));
-        toast.success(
-          `Time auto-filled: ${student.inTime} - ${student.outTime}`,
-        );
-      } else {
-        toast.info("Student found but no preferred time set. Enter manually.");
-      }
-    } catch (err) {
-      toast.error(err.response?.data?.message || "Student not found");
-      setStudentInfo(null);
+    if (student && student.inTime && student.outTime) {
+      setForm((prev) => ({
+        ...prev,
+        startTime: student.inTime,
+        endTime:   student.outTime,
+      }));
+      toast.success(`Time auto-filled: ${student.inTime} - ${student.outTime}`);
+    } else {
+      toast.info("Student found but no preferred time set. Enter manually.");
     }
-  };
+  } catch (err) {
+    toast.error(err.response?.data?.message || "Student not found");
+    setStudentInfo(null);
+  }
+};
+ 
 
   // Allot seat
   const handleAllot = async (e) => {
