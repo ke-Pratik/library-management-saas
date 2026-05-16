@@ -43,6 +43,7 @@ public class FeeService {
     private final FeeRecordRepository feeRecordRepository;
     private final StudentRepository studentRepository;
     private final StudentFeeConfigRepository feeConfigRepository;
+    private final SeatBookingRepository seatBookingRepository;
 
     private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("HH:mm");
 
@@ -447,24 +448,45 @@ public class FeeService {
                 .paymentDate(LocalDate.now().toString())
                 .build();
     }
-
     // ═══════════════════════════════════════════════════════════════════
     // STUDENT FEE STATUS
     // ═══════════════════════════════════════════════════════════════════
-    public StudentFeeStatusResponse getStudentFeeStatus(Long regNo) {
+     public StudentFeeStatusResponse getStudentFeeStatus(Long regNo) {
+
         Student student = studentRepository.findById(regNo)
                 .orElseThrow(() -> new StudentNotFoundException("Student " + regNo + " not found."));
 
-        List<FeeRecord> records = feeRecordRepository.findByRegNoOrderByFeeYearDescFeeMonthDesc(regNo);
+        List<FeeRecord> records = feeRecordRepository
+                .findByRegNoOrderByFeeYearDescFeeMonthDesc(regNo);
 
-        BigDecimal totalFee     = records.stream().map(FeeRecord::getFinalFee).reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal totalPaid    = records.stream().map(FeeRecord::getPaidAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal totalBalance = records.stream().map(FeeRecord::getBalanceAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal totalFee     = records.stream().map(FeeRecord::getFinalFee)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal totalPaid    = records.stream().map(FeeRecord::getPaidAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal totalBalance = records.stream().map(FeeRecord::getBalanceAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        // Get current seat booking if any
+        List<SeatBooking> bookings = seatBookingRepository
+                .findByRegNoOrderBySeatNoAscStartTimeAsc(regNo);
+
+        Integer seatNo   = bookings.isEmpty() ? null : bookings.get(0).getSeatNo();
+        String timeSlot  = bookings.isEmpty() ? null :
+                bookings.get(0).getStartTime().format(TIME_FMT)
+                        + " - " + bookings.get(0).getEndTime().format(TIME_FMT);
 
         return StudentFeeStatusResponse.builder()
-                .regNo(regNo).studentName(student.getName()).isActive(student.getIsActive())
-                .totalMonths(records.size()).totalFee(totalFee)
-                .totalPaid(totalPaid).totalBalance(totalBalance)
+                .regNo(regNo)
+                .studentName(student.getName())
+                .gender(student.getGender())
+                .mobile(student.getMobile())
+                .isActive(student.getIsActive())
+                .seatNo(seatNo)
+                .timeSlot(timeSlot)
+                .totalMonths(records.size())
+                .totalFee(totalFee)
+                .totalPaid(totalPaid)
+                .totalBalance(totalBalance)
                 .overallStatus(totalBalance.compareTo(BigDecimal.ZERO) <= 0 ? "ALL_PAID" : "HAS_PENDING")
                 .monthlyRecords(records)
                 .build();
