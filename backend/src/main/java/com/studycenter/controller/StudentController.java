@@ -1,5 +1,6 @@
 package com.studycenter.controller;
 
+import com.studycenter.dto.ActiveStudentsPageResponse;
 import com.studycenter.dto.DeactivateReactivateRequest;
 import com.studycenter.dto.DeactivateReactivateResponse;
 import com.studycenter.dto.StudentDetailResponse;
@@ -43,8 +44,10 @@ public class StudentController {
     }
 
     @GetMapping("/active")
-    public ResponseEntity<List<StudentDetailResponse>> active() {
-        return ResponseEntity.ok(studentService.getActiveStudents());
+    public ResponseEntity<ActiveStudentsPageResponse> active(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        return ResponseEntity.ok(studentService.getActiveStudentsPaged(page, size));
     }
 
     @GetMapping("/inactive")
@@ -56,16 +59,11 @@ public class StudentController {
     public ResponseEntity<StudentSummaryResponse> summary() {
         return ResponseEntity.ok(studentService.getStudentSummary());
     }
-    // Controller updated on 7 MAY
+
     @GetMapping("/search")
     public ResponseEntity<List<StudentDetailResponse>> search(
             @RequestParam String type,
             @RequestParam String value) {
         return ResponseEntity.ok(studentService.searchStudents(type, value));
     }
-
-   // @GetMapping("/search")
-    //public ResponseEntity<List<StudentDetailResponse>> search(@RequestParam String name) {
-      //  return ResponseEntity.ok(studentService.searchByName(name));
-    //}
 }
