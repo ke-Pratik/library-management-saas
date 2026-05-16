@@ -100,7 +100,7 @@ function Sidebar() {
           to="/fees/student"
           className={({ isActive }) => (isActive ? "active" : "")}
         >
-          <FaUserTag className="me-2" /> Student Fee
+          <FaUserTag className="me-2" /> Student Details
         </NavLink>
         <NavLink
           to="/fees/status"
