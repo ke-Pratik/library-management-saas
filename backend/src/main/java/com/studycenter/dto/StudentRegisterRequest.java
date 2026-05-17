@@ -7,6 +7,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal; // ← ENHANCEMENT #1: added import
+
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -36,10 +38,16 @@ public class StudentRegisterRequest {
     @NotBlank(message = "dateOfAdmission is required")
     private String dateOfAdmission;
 
-   // To:
     @NotBlank(message = "inTime is required")
     private String inTime;
 
     @NotBlank(message = "outTime is required")
     private String outTime;
+
+    // ── ENHANCEMENT #1: Auto-lock fee on registration ─────────────────
+    // These are optional. If not sent by frontend, they default to 0 in service.
+    private BigDecimal admissionFee;    // one-time charge collected at admission
+    private BigDecimal discountAmount;  // monthly discount negotiated with student
+    private String remarks;             // stored on the first FeeRecord for reference
+    // ── END ENHANCEMENT #1 ───────────────────────────────────────────
 }
