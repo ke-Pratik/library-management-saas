@@ -4,6 +4,7 @@ import {
   getStudentFeeStatus,
   searchStudents,
   autoGenerateFee,
+  reversePayment,
 } from "../services/api";
 import { toast } from "react-toastify";
 
@@ -166,7 +167,7 @@ function FeePayment() {
   };
 
   // ═══════════════════════════════════════
-  // PRINT RECEIPT  ← NEW
+  // PRINT RECEIPT (after fresh payment)
   // ═══════════════════════════════════════
   const handlePrintReceipt = () => {
     const win = window.open("", "_blank", "width=440,height=640");
@@ -229,6 +230,102 @@ function FeePayment() {
     win.document.close();
     win.focus();
     win.print();
+  };
+
+  // ═══════════════════════════════════════
+  // REPRINT from monthly records table ← E7
+  // ═══════════════════════════════════════
+  const handleReprintReceipt = (r) => {
+    const win = window.open("", "_blank", "width=440,height=660");
+    win.document.write(`
+      <html>
+      <head>
+        <title>Receipt - ${r.receiptNumber}</title>
+        <style>
+          * { margin:0; padding:0; box-sizing:border-box; }
+          body { font-family:Arial,sans-serif; padding:28px; max-width:380px; margin:auto; }
+          .center { text-align:center; }
+          .org  { font-size:20px; font-weight:bold; letter-spacing:1px; }
+          .sub  { font-size:12px; color:#666; margin-top:2px; }
+          .dash { border-top:2px dashed #aaa; margin:12px 0; }
+          table { width:100%; border-collapse:collapse; }
+          td    { padding:5px 2px; font-size:13px; vertical-align:top; }
+          td:first-child { color:#555; width:48%; }
+          .big  { font-size:20px; font-weight:bold; color:#198754; }
+          .bal  { font-size:16px; font-weight:bold;
+                  color:${Number(r.balanceAmount) > 0 ? "#dc3545" : "#198754"}; }
+          .pill { display:inline-block; padding:3px 10px; border-radius:4px;
+                  font-size:12px; font-weight:bold;
+                  background:${r.paymentStatus === "PAID" ? "#198754" : "#ffc107"};
+                  color:${r.paymentStatus === "PAID" ? "#fff" : "#333"}; }
+          .foot { font-size:11px; color:#999; text-align:center; margin-top:18px; }
+          .reprint { font-size:10px; color:#aaa; text-align:center; margin-top:6px; }
+        </style>
+      </head>
+      <body>
+        <div class="center">
+          <div class="org">MAA VIDYA LIBRARY</div>
+          <div class="sub">Fee Payment Receipt</div>
+        </div>
+        <div class="dash"></div>
+        <table>
+          <tr><td>Receipt No</td><td><strong>${r.receiptNumber}</strong></td></tr>
+          <tr><td>Payment Date</td><td>${r.paymentDate || "—"}</td></tr>
+        </table>
+        <div class="dash"></div>
+        <table>
+          <tr><td>Student Name</td><td>${feeData.studentName}</td></tr>
+          <tr><td>Reg No</td><td>${feeData.regNo}</td></tr>
+          <tr><td>Fee Month</td><td>${r.feeMonth} / ${r.feeYear}</td></tr>
+        </table>
+        <div class="dash"></div>
+        <table>
+          <tr><td>Total Fee</td><td>₹${r.finalFee}</td></tr>
+          <tr><td>Amount Paid</td><td class="big">₹${r.paidAmount}</td></tr>
+          <tr><td>Balance</td><td class="bal">₹${r.balanceAmount}</td></tr>
+          <tr><td>Mode</td><td>${r.paymentMode || "—"}</td></tr>
+          <tr><td>Status</td><td><span class="pill">${r.paymentStatus}</span></td></tr>
+        </table>
+        <div class="dash"></div>
+        <div class="foot">Thank you for your payment!<br>Keep this receipt for your records.</div>
+        <div class="reprint">*** REPRINT ***</div>
+      </body>
+      </html>
+    `);
+    win.document.close();
+    win.focus();
+    win.print();
+  };
+
+  // ═══════════════════════════════════════
+  // REVERSE PAYMENT ← E6
+  // ═══════════════════════════════════════
+  const [reverseLoading, setReverseLoading] = useState(null);
+
+  const handleReverse = async (r) => {
+    const confirmed = window.confirm(
+      `⚠️ Reverse payment for ${r.feeMonth}/${r.feeYear}?\n\n` +
+        `This will reset ₹${r.paidAmount} → PENDING.\n` +
+        `Action cannot be undone automatically.`,
+    );
+    if (!confirmed) return;
+
+    setReverseLoading(r.feeId);
+    try {
+      const res = await reversePayment(r.feeId, {
+        remarks: "Reversed via admin panel",
+      });
+      toast.success(res.data.message);
+
+      // Refresh fee records
+      const updated = await getStudentFeeStatus(Number(form.regNo));
+      setFeeData(updated.data);
+      setResult(null);
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Reverse failed");
+    } finally {
+      setReverseLoading(null);
+    }
   };
 
   // ═══════════════════════════════════════
@@ -388,6 +485,8 @@ function FeePayment() {
                       <th>Balance</th>
                       <th>Status</th>
                       <th>Quick Pay</th>
+                      <th>Reverse</th>
+                      <th>Reprint</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -415,6 +514,8 @@ function FeePayment() {
                         <td>₹{r.paidAmount}</td>
                         <td className="fw-bold">₹{r.balanceAmount}</td>
                         <td>{statusBadge(r.paymentStatus)}</td>
+
+                        {/* Quick Pay */}
                         <td>
                           {r.paymentStatus !== "PAID" && (
                             <button
@@ -422,6 +523,37 @@ function FeePayment() {
                               onClick={() => handleQuickFill(r)}
                             >
                               💰 Fill
+                            </button>
+                          )}
+                        </td>
+
+                        {/* Reverse ← E6 */}
+                        <td>
+                          {(r.paymentStatus === "PAID" ||
+                            r.paymentStatus === "PARTIAL") && (
+                            <button
+                              className="btn btn-sm btn-outline-danger"
+                              disabled={reverseLoading === r.feeId}
+                              onClick={() => handleReverse(r)}
+                            >
+                              {reverseLoading === r.feeId ? (
+                                <span className="spinner-border spinner-border-sm" />
+                              ) : (
+                                "↩️ Reverse"
+                              )}
+                            </button>
+                          )}
+                        </td>
+
+                        {/* Reprint ← E7 */}
+                        <td>
+                          {r.receiptNumber && (
+                            <button
+                              className="btn btn-sm btn-outline-primary"
+                              onClick={() => handleReprintReceipt(r)}
+                              title={`Reprint ${r.receiptNumber}`}
+                            >
+                              🖨️
                             </button>
                           )}
                         </td>
@@ -580,7 +712,11 @@ function FeePayment() {
                 <td>Status</td>
                 <td>
                   <span
-                    className={`badge fs-6 ${result.paymentStatus === "PAID" ? "bg-success" : "bg-warning text-dark"}`}
+                    className={`badge fs-6 ${
+                      result.paymentStatus === "PAID"
+                        ? "bg-success"
+                        : "bg-warning text-dark"
+                    }`}
                   >
                     {result.paymentStatus === "PAID"
                       ? "✅ FULLY PAID"
@@ -599,7 +735,6 @@ function FeePayment() {
             </tbody>
           </table>
 
-          {/* ── Print Receipt Button ← NEW ── */}
           <div className="mt-3">
             <button
               className="btn btn-outline-primary"
