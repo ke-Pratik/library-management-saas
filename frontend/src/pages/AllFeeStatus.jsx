@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { getAllFeeStatus } from "../services/api";
+import { getAllFeeStatus, generateAllFees } from "../services/api"; // ← ENHANCEMENT #2: import generateAllFees
 import { toast } from "react-toastify";
 
 const MONTH_NAMES = [
@@ -15,11 +15,17 @@ function AllFeeStatus() {
   const [loading, setLoading] = useState(false);
   const [statusFilter, setStatusFilter] = useState("ALL");
 
+  // ── ENHANCEMENT #2: Generate All state ───────────────────────────────
+  const [genLoading, setGenLoading] = useState(false);
+  const [genResult, setGenResult] = useState(null);
+  // ── END ENHANCEMENT #2 ───────────────────────────────────────────────
+
   const handleFetch = async (e) => {
     e.preventDefault();
     setLoading(true);
     setData(null);
     setStatusFilter("ALL");
+    setGenResult(null); // clear previous generate result on new fetch
     try {
       const res = await getAllFeeStatus({ month, year });
       setData(res.data);
@@ -29,6 +35,32 @@ function AllFeeStatus() {
       setLoading(false);
     }
   };
+
+  // ── ENHANCEMENT #2: Generate All handler ─────────────────────────────
+  // Calls POST /fees/generate-all?month=X&year=Y
+  // After success, auto-refreshes the fee status table for the same month/year
+  const handleGenerateAll = async () => {
+    setGenLoading(true);
+    setGenResult(null);
+    try {
+      const res = await generateAllFees({ month, year });
+      setGenResult(res.data);
+      toast.success(
+        `Generated: ${res.data.generated} | Skipped: ${res.data.skipped} | No Config: ${res.data.noConfig}`
+      );
+      // Auto-refresh the table so admin sees newly created records immediately
+      if (res.data.generated > 0) {
+        const refreshed = await getAllFeeStatus({ month, year });
+        setData(refreshed.data);
+        setStatusFilter("ALL");
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Fee generation failed");
+    } finally {
+      setGenLoading(false);
+    }
+  };
+  // ── END ENHANCEMENT #2 ───────────────────────────────────────────────
 
   const filtered = useMemo(() => {
     if (!data?.students) return [];
@@ -77,14 +109,15 @@ function AllFeeStatus() {
     <div>
       <h2 className="page-title">📋 All Students Fee Status</h2>
 
-      <div className="form-section col-lg-6 mb-4">
-        <form onSubmit={handleFetch} className="d-flex gap-3 align-items-end">
+      {/* Month/Year selector + Fetch + Generate All */}
+      <div className="form-section col-lg-8 mb-4">
+        <form onSubmit={handleFetch} className="d-flex gap-3 align-items-end flex-wrap">
           <div>
             <label className="form-label fw-bold">Month</label>
             <select
               className="form-select"
               value={month}
-              onChange={(e) => setMonth(Number(e.target.value))}
+              onChange={(e) => { setMonth(Number(e.target.value)); setGenResult(null); }}
             >
               {MONTH_NAMES.map((m, i) => (
                 <option key={i} value={i + 1}>{m}</option>
@@ -96,15 +129,79 @@ function AllFeeStatus() {
             <input
               type="number"
               className="form-control"
+              style={{ width: "100px" }}
               value={year}
-              onChange={(e) => setYear(e.target.value)}
+              onChange={(e) => { setYear(e.target.value); setGenResult(null); }}
             />
           </div>
           <button type="submit" className="btn btn-primary" disabled={loading}>
             {loading ? "Loading..." : "🔍 Fetch"}
           </button>
+
+          {/* ── ENHANCEMENT #2: Generate All Fees button ─────────────────
+              Admin clicks this at start of month to create PENDING records
+              for all active students who have a config but no record yet.
+              Idempotent — existing records are never touched. */}
+          <button
+            type="button"
+            className="btn btn-warning"
+            onClick={handleGenerateAll}
+            disabled={genLoading}
+            title="Creates fee records for all active students who don't have one yet for this month"
+          >
+            {genLoading ? (
+              <>
+                <span className="spinner-border spinner-border-sm me-2" />
+                Generating...
+              </>
+            ) : (
+              "⚡ Generate All Fees"
+            )}
+          </button>
+          {/* ── END ENHANCEMENT #2 button ─────────────────────────────── */}
         </form>
       </div>
+
+      {/* ── ENHANCEMENT #2: Generation result summary ────────────────────── */}
+      {genResult && (
+        <div className="alert alert-warning col-lg-8 mb-4">
+          <h6 className="fw-bold mb-2">
+            ⚡ Fee Generation Result — {MONTH_NAMES[genResult.month - 1]} {genResult.year}
+          </h6>
+          <div className="d-flex gap-4 flex-wrap mb-2">
+            <span>
+              <span className="fw-bold text-dark">Total Active Students:</span>{" "}
+              {genResult.totalActiveStudents}
+            </span>
+            <span>
+              <span className="fw-bold text-success">✅ Generated:</span>{" "}
+              {genResult.generated}
+            </span>
+            <span>
+              <span className="fw-bold text-secondary">⏭ Skipped (already existed):</span>{" "}
+              {genResult.skipped}
+            </span>
+            <span>
+              <span className="fw-bold text-danger">⚠️ No Config:</span>{" "}
+              {genResult.noConfig}
+            </span>
+          </div>
+          {/* Show regNos with no config so admin can manually lock their fee */}
+          {genResult.noConfig > 0 && (
+            <div className="mt-1">
+              <small className="text-danger fw-bold">
+                These students have no fee config — lock their fee manually from the Fee Calculate page:
+              </small>
+              <div className="mt-1 d-flex gap-2 flex-wrap">
+                {genResult.noConfigRegNos.map((rn) => (
+                  <span key={rn} className="badge bg-danger">Reg #{rn}</span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+      {/* ── END ENHANCEMENT #2 result summary ───────────────────────────── */}
 
       {data && (
         <div>
@@ -193,7 +290,8 @@ function AllFeeStatus() {
 
           <small className="text-muted">
             ⚠️ Students with no fee record for this month are not shown here.
-            Lock their fee from the <strong>Fee Calculate</strong> page.
+            Use <strong>⚡ Generate All Fees</strong> button above to create records for all active students,
+            or lock individually from the <strong>Fee Calculate</strong> page.
           </small>
         </div>
       )}
