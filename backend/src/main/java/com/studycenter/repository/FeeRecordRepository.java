@@ -24,6 +24,8 @@ public interface FeeRecordRepository extends JpaRepository<FeeRecord, Long> {
 
     List<FeeRecord> findByPaymentDateBetween(LocalDate startDate, LocalDate endDate);
 
+    Optional<FeeRecord> findByReceiptNumber(String receiptNumber);
+
     @Query("SELECT COALESCE(SUM(f.finalFee), 0) FROM FeeRecord f WHERE f.feeMonth = :month AND f.feeYear = :year")
     BigDecimal sumFinalFeeByMonth(@Param("month") Integer month, @Param("year") Integer year);
 

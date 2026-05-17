@@ -1,13 +1,18 @@
 package com.studycenter.controller;
 
 import com.studycenter.dto.AllStudentsFeeStatusResponse;
+import com.studycenter.dto.BulkPaymentRequest;
+import com.studycenter.dto.BulkPaymentResponse;
 import com.studycenter.dto.FeeCalculateResponse;
 import com.studycenter.dto.FeeCollectionResponse;
 import com.studycenter.dto.FeeLockRequest;
 import com.studycenter.dto.FeePaymentRequest;
 import com.studycenter.dto.FeePaymentResponse;
 import com.studycenter.dto.FeePreviewRequest;
-import com.studycenter.dto.GenerateAllFeesResponse; // ← ENHANCEMENT #2
+import com.studycenter.dto.GenerateAllFeesResponse;
+import com.studycenter.dto.NoConfigStudentsResponse;
+import com.studycenter.dto.ReversePaymentRequest;
+import com.studycenter.dto.ReversePaymentResponse;
 import com.studycenter.dto.StudentFeeStatusResponse;
 import com.studycenter.service.FeeService;
 import jakarta.validation.Valid;
@@ -30,44 +35,32 @@ public class FeeController {
     private final FeeService feeService;
 
     @PostMapping("/preview")
-    public ResponseEntity<FeeCalculateResponse> preview(
-            @Valid @RequestBody FeePreviewRequest req) {
+    public ResponseEntity<FeeCalculateResponse> preview(@Valid @RequestBody FeePreviewRequest req) {
         return ResponseEntity.ok(feeService.previewFee(req));
     }
 
     @PostMapping("/lock")
-    public ResponseEntity<FeeCalculateResponse> lock(
-            @Valid @RequestBody FeeLockRequest req) {
+    public ResponseEntity<FeeCalculateResponse> lock(@Valid @RequestBody FeeLockRequest req) {
         return new ResponseEntity<>(feeService.lockFee(req), HttpStatus.CREATED);
     }
 
-    // Auto-generate current month fee record from saved config
-    // Called by FeePayment page on student selection
     @PostMapping("/auto-generate/{regNo}")
     public ResponseEntity<?> autoGenerate(@PathVariable Long regNo) {
         FeeCalculateResponse result = feeService.autoGenerateCurrentMonthFee(regNo);
-        if (result == null) {
+        if (result == null)
             return ResponseEntity.ok(Map.of("message", "Fee record already exists for current month."));
-        }
         return new ResponseEntity<>(result, HttpStatus.CREATED);
     }
 
-    // ── ENHANCEMENT #2: Bulk generate fees for all active students for a month ──
-    // Idempotent — already-existing records are never touched
-    // Usage: POST /api/fees/generate-all?month=6&year=2026
+    // ENHANCEMENT #2: Bulk generate fees for all active students
     @PostMapping("/generate-all")
     public ResponseEntity<GenerateAllFeesResponse> generateAll(
-            @RequestParam Integer month,
-            @RequestParam Integer year) {
-        return new ResponseEntity<>(
-                feeService.generateAllFeesForMonth(month, year),
-                HttpStatus.CREATED);
+            @RequestParam Integer month, @RequestParam Integer year) {
+        return new ResponseEntity<>(feeService.generateAllFeesForMonth(month, year), HttpStatus.CREATED);
     }
-    // ── END ENHANCEMENT #2 ────────────────────────────────────────────────────
 
     @PostMapping("/pay")
-    public ResponseEntity<FeePaymentResponse> pay(
-            @Valid @RequestBody FeePaymentRequest req) {
+    public ResponseEntity<FeePaymentResponse> pay(@Valid @RequestBody FeePaymentRequest req) {
         return ResponseEntity.ok(feeService.recordPayment(req));
     }
 
@@ -76,10 +69,17 @@ public class FeeController {
         return ResponseEntity.ok(feeService.getStudentFeeStatus(regNo));
     }
 
+    // ENHANCEMENT #3: Now returns ALL active students including those with NO_RECORD
     @GetMapping("/status")
     public ResponseEntity<AllStudentsFeeStatusResponse> allStatus(
             @RequestParam Integer month, @RequestParam Integer year) {
         return ResponseEntity.ok(feeService.getAllStudentsFeeStatus(month, year));
+    }
+
+    // ENHANCEMENT #4: Active students who have no fee config (fee never locked)
+    @GetMapping("/no-config")
+    public ResponseEntity<NoConfigStudentsResponse> noConfig() {
+        return ResponseEntity.ok(feeService.getStudentsWithNoConfig());
     }
 
     @GetMapping("/collection/monthly")
@@ -93,5 +93,28 @@ public class FeeController {
             @RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate startDate,
             @RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate endDate) {
         return ResponseEntity.ok(feeService.getCollectionByDateRange(startDate, endDate));
+    }
+
+    // ENHANCEMENT #5: Bulk payment — process multiple students in one call
+    // Entire batch is atomic: if one fails, all roll back
+    @PostMapping("/bulk-payment")
+    public ResponseEntity<BulkPaymentResponse> bulkPay(@Valid @RequestBody BulkPaymentRequest req) {
+        return new ResponseEntity<>(feeService.bulkPayment(req), HttpStatus.CREATED);
+    }
+
+    // ENHANCEMENT #6: Reverse a payment — reset fee record back to PENDING
+    @PostMapping("/reverse/{feeId}")
+    public ResponseEntity<ReversePaymentResponse> reverse(
+            @PathVariable Long feeId,
+            @RequestBody(required = false) ReversePaymentRequest req) {
+        String remarks = req != null ? req.getRemarks() : null;
+        return ResponseEntity.ok(feeService.reversePayment(feeId, remarks));
+    }
+
+    // E7
+    @GetMapping("/receipt/{receiptNumber}")
+    public ResponseEntity<ReceiptResponse> getReceipt(
+            @PathVariable String receiptNumber) {
+        return ResponseEntity.ok(feeService.getReceipt(receiptNumber));
     }
 }

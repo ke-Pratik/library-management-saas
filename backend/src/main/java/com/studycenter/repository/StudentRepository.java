@@ -14,13 +14,9 @@ import java.util.List;
 public interface StudentRepository extends JpaRepository<Student, Long> {
 
     List<Student> findByIsActiveTrue();
-
     List<Student> findByIsActiveFalse();
-
     boolean existsByAadhaarNo(String aadhaarNo);
-
     long countByIsActiveTrue();
-
     long countByIsActiveFalse();
 
     @Query("SELECT s FROM Student s WHERE LOWER(s.name) LIKE LOWER(CONCAT('%', :name, '%')) ORDER BY s.name ASC")
@@ -35,6 +31,7 @@ public interface StudentRepository extends JpaRepository<Student, Long> {
     @Query("SELECT s FROM Student s WHERE s.isActive = true AND s.mobile LIKE CONCAT('%', :mobile, '%') ORDER BY s.name ASC")
     List<Student> searchActiveByMobile(@Param("mobile") String mobile);
 
+    // Existing query — Active Students page with seat + fee status
     @Query(
             value = "SELECT " +
                     "  s.reg_no        AS regNo, " +
@@ -78,4 +75,56 @@ public interface StudentRepository extends JpaRepository<Student, Long> {
             @Param("month") int month,
             @Param("year") int year,
             Pageable pageable);
+
+    // ── ENHANCEMENT #3: LEFT JOIN all active students with fee_records ────────
+    // Returns all active students — fee columns are NULL when no record exists.
+    // Database does the join. DB-agnostic: plain LEFT JOIN works on MySQL + PostgreSQL.
+    @Query(
+            value = "SELECT " +
+                    "  s.reg_no            AS regNo, " +
+                    "  s.name              AS name, " +
+                    "  s.in_time           AS inTime, " +
+                    "  s.out_time          AS outTime, " +
+                    "  fr.final_fee        AS finalFee, " +
+                    "  fr.paid_amount      AS paidAmount, " +
+                    "  fr.balance_amount   AS balanceAmount, " +
+                    "  fr.payment_status   AS paymentStatus, " +
+                    "  fr.payment_mode     AS paymentMode, " +
+                    "  fr.receipt_number   AS receiptNumber " +
+                    "FROM students s " +
+                    "LEFT JOIN fee_records fr " +
+                    "  ON s.reg_no = fr.reg_no " +
+                    "  AND fr.fee_month = :month " +
+                    "  AND fr.fee_year  = :year " +
+                    "WHERE s.is_active = true " +
+                    "ORDER BY s.reg_no ASC",
+            nativeQuery = true
+    )
+    List<AllStudentFeeProjection> findAllStudentsFeeStatus(
+            @Param("month") int month,
+            @Param("year") int year);
+    // ── END ENHANCEMENT #3 ───────────────────────────────────────────────────
+
+    // ── ENHANCEMENT #4: LEFT JOIN active students with student_fee_config ─────
+    // Returns only students who have NO active config (effective_to_date IS NULL).
+    // These students were registered before Enhancement #1 — need manual fee lock.
+    @Query(
+            value = "SELECT " +
+                    "  s.reg_no             AS regNo, " +
+                    "  s.name               AS name, " +
+                    "  s.mobile             AS mobile, " +
+                    "  s.in_time            AS inTime, " +
+                    "  s.out_time           AS outTime, " +
+                    "  s.date_of_admission  AS dateOfAdmission " +
+                    "FROM students s " +
+                    "LEFT JOIN student_fee_config sfc " +
+                    "  ON s.reg_no = sfc.reg_no " +
+                    "  AND sfc.effective_to_date IS NULL " +
+                    "WHERE s.is_active = true " +
+                    "  AND sfc.config_id IS NULL " +
+                    "ORDER BY s.reg_no ASC",
+            nativeQuery = true
+    )
+    List<NoFeeConfigProjection> findActiveStudentsWithNoConfig();
+    // ── END ENHANCEMENT #4 ───────────────────────────────────────────────────
 }
