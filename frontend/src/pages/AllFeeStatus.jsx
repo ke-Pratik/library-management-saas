@@ -1,6 +1,11 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { getAllFeeStatus } from "../services/api";
 import { toast } from "react-toastify";
+
+const MONTH_NAMES = [
+  "January","February","March","April","May","June",
+  "July","August","September","October","November","December"
+];
 
 function AllFeeStatus() {
   const now = new Date();
@@ -8,41 +13,83 @@ function AllFeeStatus() {
   const [year, setYear] = useState(now.getFullYear());
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [statusFilter, setStatusFilter] = useState("ALL");
 
   const handleFetch = async (e) => {
     e.preventDefault();
     setLoading(true);
+    setData(null);
+    setStatusFilter("ALL");
     try {
       const res = await getAllFeeStatus({ month, year });
       setData(res.data);
     } catch (err) {
-      toast.error(err.response?.data?.message || "Error");
+      toast.error(err.response?.data?.message || "Error fetching data");
     } finally {
       setLoading(false);
     }
   };
 
-  const statusBadge = (s) => {
-    if (s === "PAID") return <span className="badge badge-paid">✅</span>;
-    if (s === "PARTIAL") return <span className="badge badge-partial">🔶</span>;
-    return <span className="badge badge-pending">⏳</span>;
+  const filtered = useMemo(() => {
+    if (!data?.students) return [];
+    if (statusFilter === "ALL") return data.students;
+    return data.students.filter((s) => s.paymentStatus === statusFilter);
+  }, [data, statusFilter]);
+
+  const exportCSV = () => {
+    if (!filtered.length) {
+      toast.error("No data to export");
+      return;
+    }
+    const headers = [
+      "S.No","Reg No","Name","Time Slot",
+      "Total Fee","Paid","Balance","Status","Mode","Receipt No"
+    ];
+    const rows = filtered.map((s, i) => [
+      i + 1, s.regNo, s.studentName, s.timeSlot,
+      s.finalFee, s.paidAmount, s.balanceAmount,
+      s.paymentStatus, s.paymentMode || "-", s.receiptNumber || "-",
+    ]);
+    const csv = [headers, ...rows]
+      .map((row) =>
+        row.map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`).join(",")
+      )
+      .join("\n");
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `fee-status-${MONTH_NAMES[month - 1]}-${year}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
+
+  const statusBadge = (s) => {
+    if (s === "PAID")    return <span className="badge badge-paid">✅ PAID</span>;
+    if (s === "PARTIAL") return <span className="badge badge-partial">🔶 PARTIAL</span>;
+    return <span className="badge badge-pending">⏳ PENDING</span>;
+  };
+
+  const countOf = (status) =>
+    data?.students?.filter((s) => s.paymentStatus === status).length ?? 0;
 
   return (
     <div>
       <h2 className="page-title">📋 All Students Fee Status</h2>
+
       <div className="form-section col-lg-6 mb-4">
         <form onSubmit={handleFetch} className="d-flex gap-3 align-items-end">
           <div>
             <label className="form-label fw-bold">Month</label>
-            <input
-              type="number"
-              className="form-control"
-              min="1"
-              max="12"
+            <select
+              className="form-select"
               value={month}
-              onChange={(e) => setMonth(e.target.value)}
-            />
+              onChange={(e) => setMonth(Number(e.target.value))}
+            >
+              {MONTH_NAMES.map((m, i) => (
+                <option key={i} value={i + 1}>{m}</option>
+              ))}
+            </select>
           </div>
           <div>
             <label className="form-label fw-bold">Year</label>
@@ -54,61 +101,100 @@ function AllFeeStatus() {
             />
           </div>
           <button type="submit" className="btn btn-primary" disabled={loading}>
-            🔍 Fetch
+            {loading ? "Loading..." : "🔍 Fetch"}
           </button>
         </form>
       </div>
 
       {data && (
         <div>
-          <div className="d-flex gap-3 mb-3">
+          {/* Summary badges */}
+          <div className="d-flex gap-2 mb-3 flex-wrap">
             <span className="badge badge-paid px-3 py-2">
-              Paid: {data.paidCount}
+              ✅ Paid: {data.paidCount}
             </span>
             <span className="badge badge-partial px-3 py-2">
-              Partial: {data.partialCount}
+              🔶 Partial: {data.partialCount}
             </span>
             <span className="badge badge-pending px-3 py-2">
-              Pending: {data.pendingCount}
+              ⏳ Pending: {data.pendingCount}
             </span>
             <span className="badge bg-dark px-3 py-2">
-              Total: ₹{data.totalFeeExpected} | Collected: ₹
-              {data.totalCollected}
+              Expected: ₹{data.totalFeeExpected} | Collected: ₹{data.totalCollected}
             </span>
           </div>
 
-          <div className="table-responsive">
-            <table className="table table-custom table-hover">
-              <thead>
-                <tr>
-                  <th>RegNo</th>
-                  <th>Name</th>
-                  <th>Slot</th>
-                  <th>Fee</th>
-                  <th>Paid</th>
-                  <th>Balance</th>
-                  <th>Status</th>
-                  <th>Mode</th>
-                  <th>Receipt</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.students.map((s, i) => (
-                  <tr key={i}>
-                    <td className="fw-bold">{s.regNo}</td>
-                    <td>{s.studentName}</td>
-                    <td>{s.timeSlot}</td>
-                    <td>₹{s.finalFee}</td>
-                    <td>₹{s.paidAmount}</td>
-                    <td>₹{s.balanceAmount}</td>
-                    <td>{statusBadge(s.paymentStatus)}</td>
-                    <td>{s.paymentMode || "-"}</td>
-                    <td>{s.receiptNumber || "-"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          {/* Filter + Export */}
+          <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+            <div className="d-flex gap-2 flex-wrap">
+              {[
+                { key: "ALL",     label: `All (${data.students.length})` },
+                { key: "PAID",    label: `✅ Paid (${countOf("PAID")})` },
+                { key: "PARTIAL", label: `🔶 Partial (${countOf("PARTIAL")})` },
+                { key: "PENDING", label: `⏳ Pending (${countOf("PENDING")})` },
+              ].map(({ key, label }) => (
+                <button
+                  key={key}
+                  className={`btn btn-sm ${statusFilter === key ? "btn-dark" : "btn-outline-secondary"}`}
+                  onClick={() => setStatusFilter(key)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <button className="btn btn-sm btn-outline-success" onClick={exportCSV}>
+              📥 Export CSV
+            </button>
           </div>
+
+          {filtered.length === 0 ? (
+            <div className="alert alert-info">
+              No students with <strong>{statusFilter}</strong> status for{" "}
+              {MONTH_NAMES[month - 1]} {year}.
+            </div>
+          ) : (
+            <div className="table-responsive">
+              <table className="table table-custom table-hover">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>RegNo</th>
+                    <th>Name</th>
+                    <th>Slot</th>
+                    <th>Fee</th>
+                    <th>Paid</th>
+                    <th>Balance</th>
+                    <th>Status</th>
+                    <th>Mode</th>
+                    <th>Receipt</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((s, i) => (
+                    <tr key={i}>
+                      <td>{i + 1}</td>
+                      <td className="fw-bold">{s.regNo}</td>
+                      <td>{s.studentName}</td>
+                      <td>{s.timeSlot}</td>
+                      <td>₹{s.finalFee}</td>
+                      <td>₹{s.paidAmount}</td>
+                      <td className={s.balanceAmount > 0 ? "fw-bold text-danger" : "text-success"}>
+                        ₹{s.balanceAmount}
+                      </td>
+                      <td>{statusBadge(s.paymentStatus)}</td>
+                      <td>{s.paymentMode || "—"}</td>
+                      <td className="text-muted small">{s.receiptNumber || "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          <small className="text-muted">
+            ⚠️ Students with no fee record for this month are not shown here.
+            Lock their fee from the <strong>Fee Calculate</strong> page.
+          </small>
         </div>
       )}
     </div>
