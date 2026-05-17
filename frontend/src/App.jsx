@@ -19,6 +19,8 @@ import FeePayment        from "./pages/FeePayment";
 import StudentFeeStatus  from "./pages/StudentFeeStatus";
 import AllFeeStatus      from "./pages/AllFeeStatus";
 import CollectionReport  from "./pages/CollectionReport";
+import BulkPayment       from "./pages/BulkPayment";
+import ReceiptSearch     from "./pages/ReceiptSearch";
 
 // Layout wrapping all protected pages
 function AppLayout() {
@@ -41,6 +43,8 @@ function AppLayout() {
             <Route path="/fees/pay"          element={<FeePayment />} />
             <Route path="/fees/student"      element={<StudentFeeStatus />} />
             <Route path="/fees/status"       element={<AllFeeStatus />} />
+            <Route path="/fees/bulk-payment" element={<BulkPayment />} />
+            <Route path="/receipt-search" element={<ReceiptSearch />} />
             <Route path="/fees/collection"   element={<CollectionReport />} />
           </Routes>
         </main>
