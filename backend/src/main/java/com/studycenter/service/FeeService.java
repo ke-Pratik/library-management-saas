@@ -1,12 +1,17 @@
 package com.studycenter.service;
 
 import com.studycenter.dto.AllStudentsFeeStatusResponse;
+import com.studycenter.dto.BulkPaymentRequest;
+import com.studycenter.dto.BulkPaymentResponse;
 import com.studycenter.dto.FeeCalculateResponse;
 import com.studycenter.dto.FeeCollectionResponse;
 import com.studycenter.dto.FeeLockRequest;
 import com.studycenter.dto.FeePaymentRequest;
 import com.studycenter.dto.FeePaymentResponse;
 import com.studycenter.dto.FeePreviewRequest;
+import com.studycenter.dto.GenerateAllFeesResponse;
+import com.studycenter.dto.NoConfigStudentsResponse;
+import com.studycenter.dto.ReversePaymentResponse;
 import com.studycenter.dto.StudentFeeStatusResponse;
 import com.studycenter.entity.FeeRecord;
 import com.studycenter.entity.FeeStructure;
@@ -15,6 +20,8 @@ import com.studycenter.entity.StudentFeeConfig;
 import com.studycenter.exception.InvalidRequestException;
 import com.studycenter.exception.StudentNotFoundException;
 import com.studycenter.entity.SeatBooking;
+import com.studycenter.repository.AllStudentFeeProjection;
+import com.studycenter.repository.NoFeeConfigProjection;
 import com.studycenter.repository.SeatBookingRepository;
 import com.studycenter.repository.FeeRecordRepository;
 import com.studycenter.repository.FeeStructureRepository;
@@ -24,7 +31,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import com.studycenter.dto.GenerateAllFeesResponse;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -34,6 +40,7 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -52,7 +59,6 @@ public class FeeService {
 
     // ═══════════════════════════════════════════════════════════════════
     // INTERNAL: Core fee calculation
-    // admissionFee is only passed for first month; BigDecimal.ZERO otherwise
     // ═══════════════════════════════════════════════════════════════════
     private FeeCalculateResponse calculateFeeInternal(
             String inTimeStr, String outTimeStr,
@@ -72,7 +78,6 @@ public class FeeService {
         int feeMonth = joiningDate.getMonthValue();
         int feeYear  = joiningDate.getYear();
 
-        // ── Slot / fee lookup ─────────────────────────────────────────
         long totalHours = Duration.between(inTime, outTime).toHours();
         BigDecimal monthlyFee;
         String slotName;
@@ -99,7 +104,6 @@ public class FeeService {
             throw new InvalidRequestException(
                     "Discount (Rs." + monthlyDiscount + ") cannot exceed monthly fee (Rs." + monthlyFee + ")");
 
-        // ── Pro-ration ────────────────────────────────────────────────
         YearMonth ym        = YearMonth.of(feeYear, feeMonth);
         int totalDays       = ym.lengthOfMonth();
         int dayOfMonth      = joiningDate.getDayOfMonth();
@@ -112,52 +116,36 @@ public class FeeService {
 
         BigDecimal proratedFee;
         BigDecimal proratedDiscount;
-        BigDecimal calcFee; // fee before admission fee
+        BigDecimal calcFee;
         String calcFormula;
 
         if (!isMidMonth) {
-            // Full month
             proratedFee      = monthlyFee;
             proratedDiscount = monthlyDiscount;
-            calcFee          = monthlyFee.subtract(monthlyDiscount)
-                                         .setScale(2, RoundingMode.HALF_UP);
-            calcFormula = "Full month: Rs." + monthlyFee
-                    + " - Rs." + monthlyDiscount + " (discount) = Rs." + calcFee;
+            calcFee          = monthlyFee.subtract(monthlyDiscount).setScale(2, RoundingMode.HALF_UP);
+            calcFormula = "Full month: Rs." + monthlyFee + " - Rs." + monthlyDiscount + " = Rs." + calcFee;
         } else {
-            // Mid-month pro-ration
-            BigDecimal perDayFee = monthlyFee
-                    .divide(BigDecimal.valueOf(totalDays), 6, RoundingMode.HALF_UP);
-            BigDecimal perDayDiscount = monthlyDiscount
-                    .divide(BigDecimal.valueOf(totalDays), 6, RoundingMode.HALF_UP);
+            BigDecimal perDayFee      = monthlyFee.divide(BigDecimal.valueOf(totalDays), 6, RoundingMode.HALF_UP);
+            BigDecimal perDayDiscount = monthlyDiscount.divide(BigDecimal.valueOf(totalDays), 6, RoundingMode.HALF_UP);
 
-            proratedFee = perDayFee
-                    .multiply(BigDecimal.valueOf(applicableDays))
-                    .setScale(2, RoundingMode.HALF_UP);
-            proratedDiscount = perDayDiscount
-                    .multiply(BigDecimal.valueOf(applicableDays))
-                    .setScale(2, RoundingMode.HALF_UP);
+            proratedFee = perDayFee.multiply(BigDecimal.valueOf(applicableDays)).setScale(2, RoundingMode.HALF_UP);
+            proratedDiscount = perDayDiscount.multiply(BigDecimal.valueOf(applicableDays)).setScale(2, RoundingMode.HALF_UP);
+            calcFee = proratedFee.subtract(proratedDiscount).setScale(2, RoundingMode.HALF_UP);
 
-            calcFee = proratedFee.subtract(proratedDiscount)
-                                  .setScale(2, RoundingMode.HALF_UP);
-
-            calcFormula = "Pro-rated: (Rs." + monthlyFee + " / " + totalDays + ") x "
+            calcFormula = "Pro-rated: (Rs." + monthlyFee + "/" + totalDays + ") x "
                     + applicableDays + " = Rs." + proratedFee
-                    + " | Disc: Rs." + proratedDiscount
-                    + " | Sub-total: Rs." + calcFee;
+                    + " | Disc: Rs." + proratedDiscount + " | Sub-total: Rs." + calcFee;
         }
 
-        // ── Add admission fee ─────────────────────────────────────────
         BigDecimal finalFee = calcFee.add(admissionFee).setScale(2, RoundingMode.HALF_UP);
         if (finalFee.compareTo(BigDecimal.ZERO) < 0) finalFee = BigDecimal.ZERO;
 
         if (admissionFee.compareTo(BigDecimal.ZERO) > 0)
             calcFormula += " | Admission: Rs." + admissionFee + " | Final: Rs." + finalFee;
 
-        // ── Next month info ───────────────────────────────────────────
         YearMonth nextYm      = ym.plusMonths(1);
         String nextMonthLabel = nextYm.getMonth().name() + " " + nextYm.getYear();
-        BigDecimal nextMonthFinalFee = monthlyFee.subtract(monthlyDiscount)
-                                                  .setScale(2, RoundingMode.HALF_UP);
+        BigDecimal nextMonthFinalFee = monthlyFee.subtract(monthlyDiscount).setScale(2, RoundingMode.HALF_UP);
         if (nextMonthFinalFee.compareTo(BigDecimal.ZERO) < 0) nextMonthFinalFee = BigDecimal.ZERO;
 
         String nextMonthMessage = isMidMonth
@@ -194,18 +182,13 @@ public class FeeService {
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    // PREVIEW FEE — No DB save, no RegNo needed
+    // PREVIEW FEE
     // ═══════════════════════════════════════════════════════════════════
     public FeeCalculateResponse previewFee(FeePreviewRequest request) {
-        log.info("Fee preview: time={}-{}, joinDate={}",
-                request.getInTime(), request.getOutTime(), request.getJoiningDate());
-
+        log.info("Fee preview: time={}-{}, joinDate={}", request.getInTime(), request.getOutTime(), request.getJoiningDate());
         FeeCalculateResponse response = calculateFeeInternal(
                 request.getInTime(), request.getOutTime(),
-                request.getJoiningDate(),
-                request.getDiscountAmount(),
-                request.getAdmissionFee());
-
+                request.getJoiningDate(), request.getDiscountAmount(), request.getAdmissionFee());
         response.setStudentName("(Preview — No student linked)");
         response.setLockedInDb(false);
         return response;
@@ -213,97 +196,61 @@ public class FeeService {
 
     // ═══════════════════════════════════════════════════════════════════
     // LOCK FEE — First time for a student
-    // Saves StudentFeeConfig + creates first FeeRecord
     // ═══════════════════════════════════════════════════════════════════
     @Transactional
     public FeeCalculateResponse lockFee(FeeLockRequest request) {
         log.info("Locking fee: regNo={}, time={}-{}, joinDate={}",
                 request.getRegNo(), request.getInTime(), request.getOutTime(), request.getJoiningDate());
 
-        // ── Validate student ──────────────────────────────────────────
         Student student = studentRepository.findById(request.getRegNo())
-                .orElseThrow(() -> new StudentNotFoundException(
-                        "Student " + request.getRegNo() + " not found. Register first."));
+                .orElseThrow(() -> new StudentNotFoundException("Student " + request.getRegNo() + " not found. Register first."));
         if (!student.getIsActive())
             throw new InvalidRequestException("Student " + request.getRegNo() + " is inactive.");
 
-        // ── Check for existing config ─────────────────────────────────
-        // If config exists this is a config-change scenario (slot change)
-        // Close the old config, create new one
-        Optional<StudentFeeConfig> existingConfig =
-                feeConfigRepository.findByRegNoAndEffectiveToDateIsNull(request.getRegNo());
-
+        Optional<StudentFeeConfig> existingConfig = feeConfigRepository.findByRegNoAndEffectiveToDateIsNull(request.getRegNo());
         existingConfig.ifPresent(old -> {
             old.setEffectiveToDate(request.getJoiningDate().minusDays(1));
             feeConfigRepository.save(old);
             log.info("Closed old config id={} for regNo={}", old.getConfigId(), request.getRegNo());
         });
 
-        // ── Calculate fee ─────────────────────────────────────────────
         boolean isFirstEver = existingConfig.isEmpty();
         BigDecimal admissionFee = isFirstEver
                 ? (request.getAdmissionFee() != null ? request.getAdmissionFee() : BigDecimal.ZERO)
-                : BigDecimal.ZERO; // no admission fee on config change
-
-        BigDecimal discountAmount = request.getDiscountAmount() != null
-                ? request.getDiscountAmount() : BigDecimal.ZERO;
+                : BigDecimal.ZERO;
+        BigDecimal discountAmount = request.getDiscountAmount() != null ? request.getDiscountAmount() : BigDecimal.ZERO;
 
         FeeCalculateResponse calc = calculateFeeInternal(
-                request.getInTime(), request.getOutTime(),
-                request.getJoiningDate(),
-                discountAmount,
-                admissionFee);
+                request.getInTime(), request.getOutTime(), request.getJoiningDate(), discountAmount, admissionFee);
 
-        // ── Lookup monthly fee from calculation result ─────────────────
         LocalTime inTime  = LocalTime.parse(request.getInTime(), TIME_FMT);
         LocalTime outTime = LocalTime.parse(request.getOutTime(), TIME_FMT);
 
-        // ── Save StudentFeeConfig ─────────────────────────────────────
         StudentFeeConfig config = StudentFeeConfig.builder()
-                .regNo(request.getRegNo())
-                .inTime(inTime)
-                .outTime(outTime)
-                .monthlyFee(calc.getMonthlyFee())
-                .discountAmount(discountAmount)
-                .admissionFee(admissionFee)
-                .effectiveFromDate(request.getJoiningDate())
-                .effectiveToDate(null) // currently active
-                .createdAt(LocalDateTime.now())
-                .build();
+                .regNo(request.getRegNo()).inTime(inTime).outTime(outTime)
+                .monthlyFee(calc.getMonthlyFee()).discountAmount(discountAmount).admissionFee(admissionFee)
+                .effectiveFromDate(request.getJoiningDate()).effectiveToDate(null)
+                .createdAt(LocalDateTime.now()).build();
 
         StudentFeeConfig savedConfig = feeConfigRepository.save(config);
         log.info("Saved fee config id={} for regNo={}", savedConfig.getConfigId(), request.getRegNo());
 
-        // ── Check month record doesn't already exist ──────────────────
         int feeMonth = request.getJoiningDate().getMonthValue();
         int feeYear  = request.getJoiningDate().getYear();
 
-        if (feeRecordRepository.existsByRegNoAndFeeMonthAndFeeYear(
-                request.getRegNo(), feeMonth, feeYear))
-            throw new InvalidRequestException(
-                    "Fee already locked for RegNo " + request.getRegNo()
-                            + " for " + feeMonth + "/" + feeYear + ". Use payment page to pay.");
+        if (feeRecordRepository.existsByRegNoAndFeeMonthAndFeeYear(request.getRegNo(), feeMonth, feeYear))
+            throw new InvalidRequestException("Fee already locked for RegNo " + request.getRegNo()
+                    + " for " + feeMonth + "/" + feeYear + ". Use payment page to pay.");
 
-        // ── Save FeeRecord ────────────────────────────────────────────
         FeeRecord record = FeeRecord.builder()
-                .regNo(request.getRegNo())
-                .configId(savedConfig.getConfigId())
-                .feeMonth(feeMonth).feeYear(feeYear)
-                .inTime(inTime).outTime(outTime)
-                .totalDaysInMonth(calc.getTotalDaysInMonth())
-                .applicableDays(calc.getApplicableDays())
+                .regNo(request.getRegNo()).configId(savedConfig.getConfigId())
+                .feeMonth(feeMonth).feeYear(feeYear).inTime(inTime).outTime(outTime)
+                .totalDaysInMonth(calc.getTotalDaysInMonth()).applicableDays(calc.getApplicableDays())
                 .joiningDateInMonth(request.getJoiningDate())
-                .monthlyFee(calc.getMonthlyFee())
-                .proratedFee(calc.getProratedFee())
-                .admissionFee(admissionFee)
-                .discountAmount(calc.getDiscountAmount())
-                .finalFee(calc.getFinalFee())
-                .paidAmount(BigDecimal.ZERO)
-                .balanceAmount(calc.getFinalFee())
-                .paymentStatus("PENDING")
-                .remarks(request.getRemarks())
-                .createdAt(LocalDateTime.now())
-                .build();
+                .monthlyFee(calc.getMonthlyFee()).proratedFee(calc.getProratedFee())
+                .admissionFee(admissionFee).discountAmount(calc.getDiscountAmount())
+                .finalFee(calc.getFinalFee()).paidAmount(BigDecimal.ZERO).balanceAmount(calc.getFinalFee())
+                .paymentStatus("PENDING").remarks(request.getRemarks()).createdAt(LocalDateTime.now()).build();
 
         FeeRecord saved = feeRecordRepository.save(record);
         log.info("Fee locked: feeId={}, regNo={}, finalFee={}", saved.getFeeId(), saved.getRegNo(), saved.getFinalFee());
@@ -316,63 +263,43 @@ public class FeeService {
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    // AUTO-GENERATE — Called when FeePayment page selects a student
-    // Checks if current month fee_record exists; creates from config if not
+    // AUTO-GENERATE CURRENT MONTH FEE
     // ═══════════════════════════════════════════════════════════════════
     @Transactional
     public FeeCalculateResponse autoGenerateCurrentMonthFee(Long regNo) {
-
         Student student = studentRepository.findById(regNo)
                 .orElseThrow(() -> new StudentNotFoundException("Student " + regNo + " not found."));
-
         if (!student.getIsActive())
             throw new InvalidRequestException("Student " + regNo + " is inactive.");
 
-        // Must have a config — means fee was locked at admission
-        StudentFeeConfig config = feeConfigRepository
-                .findByRegNoAndEffectiveToDateIsNull(regNo)
+        StudentFeeConfig config = feeConfigRepository.findByRegNoAndEffectiveToDateIsNull(regNo)
                 .orElseThrow(() -> new InvalidRequestException(
-                        "No fee config found for RegNo " + regNo
-                        + ". Please lock fee first on the Fee Calculate page."));
+                        "No fee config found for RegNo " + regNo + ". Please lock fee first on the Fee Calculate page."));
 
         LocalDate today    = LocalDate.now();
         int currentMonth   = today.getMonthValue();
         int currentYear    = today.getYear();
 
-        // If record already exists for this month, nothing to do
         if (feeRecordRepository.existsByRegNoAndFeeMonthAndFeeYear(regNo, currentMonth, currentYear)) {
             log.info("Fee record already exists for regNo={} for {}/{}", regNo, currentMonth, currentYear);
-            return null; // caller handles this — just fetch existing records
+            return null;
         }
 
-        // Auto-generate: always full month, no admission fee, use 1st of month as joining date
         LocalDate firstOfMonth = LocalDate.of(currentYear, currentMonth, 1);
-
         FeeCalculateResponse calc = calculateFeeInternal(
-                config.getInTime().format(TIME_FMT),
-                config.getOutTime().format(TIME_FMT),
-                firstOfMonth,
-                config.getDiscountAmount(),
-                BigDecimal.ZERO); // NO admission fee from month 2 onwards
+                config.getInTime().format(TIME_FMT), config.getOutTime().format(TIME_FMT),
+                firstOfMonth, config.getDiscountAmount(), BigDecimal.ZERO);
 
         FeeRecord record = FeeRecord.builder()
-                .regNo(regNo)
-                .configId(config.getConfigId())
+                .regNo(regNo).configId(config.getConfigId())
                 .feeMonth(currentMonth).feeYear(currentYear)
                 .inTime(config.getInTime()).outTime(config.getOutTime())
-                .totalDaysInMonth(calc.getTotalDaysInMonth())
-                .applicableDays(calc.getApplicableDays())
+                .totalDaysInMonth(calc.getTotalDaysInMonth()).applicableDays(calc.getApplicableDays())
                 .joiningDateInMonth(firstOfMonth)
-                .monthlyFee(calc.getMonthlyFee())
-                .proratedFee(calc.getProratedFee())
-                .admissionFee(BigDecimal.ZERO)
-                .discountAmount(calc.getDiscountAmount())
-                .finalFee(calc.getFinalFee())
-                .paidAmount(BigDecimal.ZERO)
-                .balanceAmount(calc.getFinalFee())
-                .paymentStatus("PENDING")
-                .createdAt(LocalDateTime.now())
-                .build();
+                .monthlyFee(calc.getMonthlyFee()).proratedFee(calc.getProratedFee())
+                .admissionFee(BigDecimal.ZERO).discountAmount(calc.getDiscountAmount())
+                .finalFee(calc.getFinalFee()).paidAmount(BigDecimal.ZERO).balanceAmount(calc.getFinalFee())
+                .paymentStatus("PENDING").createdAt(LocalDateTime.now()).build();
 
         FeeRecord saved = feeRecordRepository.save(record);
         log.info("Auto-generated fee: feeId={}, regNo={}, month={}/{}, fee={}",
@@ -386,7 +313,7 @@ public class FeeService {
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    // RECORD PAYMENT — Partial or Full
+    // RECORD PAYMENT
     // ═══════════════════════════════════════════════════════════════════
     @Transactional
     public FeePaymentResponse recordPayment(FeePaymentRequest request) {
@@ -398,16 +325,13 @@ public class FeeService {
             throw new InvalidRequestException("paymentMode must be CASH or ONLINE");
 
         Student student = studentRepository.findById(request.getRegNo())
-                .orElseThrow(() -> new StudentNotFoundException(
-                        "Student " + request.getRegNo() + " not found."));
+                .orElseThrow(() -> new StudentNotFoundException("Student " + request.getRegNo() + " not found."));
 
         FeeRecord record = feeRecordRepository
-                .findByRegNoAndFeeMonthAndFeeYear(
-                        request.getRegNo(), request.getFeeMonth(), request.getFeeYear())
+                .findByRegNoAndFeeMonthAndFeeYear(request.getRegNo(), request.getFeeMonth(), request.getFeeYear())
                 .orElseThrow(() -> new InvalidRequestException(
                         "No fee record found for RegNo " + request.getRegNo()
-                        + " for " + request.getFeeMonth() + "/" + request.getFeeYear()
-                        + ". Please lock fee first."));
+                        + " for " + request.getFeeMonth() + "/" + request.getFeeYear() + ". Please lock fee first."));
 
         if ("PAID".equals(record.getPaymentStatus()))
             throw new InvalidRequestException("Fee already fully PAID.");
@@ -416,8 +340,7 @@ public class FeeService {
         if (payAmount.compareTo(BigDecimal.ZERO) <= 0)
             throw new InvalidRequestException("Amount must be > 0");
         if (payAmount.compareTo(record.getBalanceAmount()) > 0)
-            throw new InvalidRequestException(
-                    "Amount Rs." + payAmount + " exceeds balance Rs." + record.getBalanceAmount());
+            throw new InvalidRequestException("Amount Rs." + payAmount + " exceeds balance Rs." + record.getBalanceAmount());
 
         BigDecimal newPaid    = record.getPaidAmount().add(payAmount);
         BigDecimal newBalance = record.getFinalFee().subtract(newPaid);
@@ -425,7 +348,6 @@ public class FeeService {
         if (newBalance.compareTo(BigDecimal.ZERO) < 0) newBalance = BigDecimal.ZERO;
 
         String receipt = generateReceiptNumber(record.getFeeMonth(), record.getFeeYear());
-
         record.setPaidAmount(newPaid);
         record.setBalanceAmount(newBalance);
         record.setPaymentStatus(newStatus);
@@ -437,104 +359,133 @@ public class FeeService {
 
         return FeePaymentResponse.builder()
                 .message("Payment recorded successfully!")
-                .feeId(record.getFeeId())
-                .regNo(record.getRegNo())
-                .studentName(student.getName())
-                .receiptNumber(receipt)
-                .feeMonth(record.getFeeMonth()).feeYear(record.getFeeYear())
-                .finalFee(record.getFinalFee())
-                .amountPaidNow(payAmount)
-                .totalPaidSoFar(newPaid)
-                .balanceRemaining(newBalance)
-                .paymentStatus(newStatus)
-                .paymentMode(mode)
-                .paymentDate(LocalDate.now().toString())
-                .build();
+                .feeId(record.getFeeId()).regNo(record.getRegNo()).studentName(student.getName())
+                .receiptNumber(receipt).feeMonth(record.getFeeMonth()).feeYear(record.getFeeYear())
+                .finalFee(record.getFinalFee()).amountPaidNow(payAmount).totalPaidSoFar(newPaid)
+                .balanceRemaining(newBalance).paymentStatus(newStatus).paymentMode(mode)
+                .paymentDate(LocalDate.now().toString()).build();
     }
+
     // ═══════════════════════════════════════════════════════════════════
     // STUDENT FEE STATUS
     // ═══════════════════════════════════════════════════════════════════
-     public StudentFeeStatusResponse getStudentFeeStatus(Long regNo) {
-
+    public StudentFeeStatusResponse getStudentFeeStatus(Long regNo) {
         Student student = studentRepository.findById(regNo)
                 .orElseThrow(() -> new StudentNotFoundException("Student " + regNo + " not found."));
 
-        List<FeeRecord> records = feeRecordRepository
-                .findByRegNoOrderByFeeYearDescFeeMonthDesc(regNo);
+        List<FeeRecord> records = feeRecordRepository.findByRegNoOrderByFeeYearDescFeeMonthDesc(regNo);
 
-        BigDecimal totalFee     = records.stream().map(FeeRecord::getFinalFee)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal totalPaid    = records.stream().map(FeeRecord::getPaidAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal totalBalance = records.stream().map(FeeRecord::getBalanceAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal totalFee     = records.stream().map(FeeRecord::getFinalFee).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal totalPaid    = records.stream().map(FeeRecord::getPaidAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal totalBalance = records.stream().map(FeeRecord::getBalanceAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        // Get current seat booking if any
-        List<SeatBooking> bookings = seatBookingRepository
-                .findByRegNoOrderBySeatNoAscStartTimeAsc(regNo);
-
-        Integer seatNo   = bookings.isEmpty() ? null : bookings.get(0).getSeatNo();
-        String timeSlot  = bookings.isEmpty() ? null :
-                bookings.get(0).getStartTime().format(TIME_FMT)
-                        + " - " + bookings.get(0).getEndTime().format(TIME_FMT);
+        List<SeatBooking> bookings = seatBookingRepository.findByRegNoOrderBySeatNoAscStartTimeAsc(regNo);
+        Integer seatNo  = bookings.isEmpty() ? null : bookings.get(0).getSeatNo();
+        String timeSlot = bookings.isEmpty() ? null :
+                bookings.get(0).getStartTime().format(TIME_FMT) + " - " + bookings.get(0).getEndTime().format(TIME_FMT);
 
         return StudentFeeStatusResponse.builder()
-                .regNo(regNo)
-                .studentName(student.getName())
-                .gender(student.getGender())
-                .mobile(student.getMobile())
-                .isActive(student.getIsActive())
-                .seatNo(seatNo)
-                .timeSlot(timeSlot)
-                .totalMonths(records.size())
-                .totalFee(totalFee)
-                .totalPaid(totalPaid)
-                .totalBalance(totalBalance)
+                .regNo(regNo).studentName(student.getName()).gender(student.getGender())
+                .mobile(student.getMobile()).isActive(student.getIsActive())
+                .seatNo(seatNo).timeSlot(timeSlot).totalMonths(records.size())
+                .totalFee(totalFee).totalPaid(totalPaid).totalBalance(totalBalance)
                 .overallStatus(totalBalance.compareTo(BigDecimal.ZERO) <= 0 ? "ALL_PAID" : "HAS_PENDING")
-                .monthlyRecords(records)
-                .build();
+                .monthlyRecords(records).build();
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    // ALL STUDENTS FEE STATUS
+    // ENHANCEMENT #3: ALL STUDENTS FEE STATUS — LEFT JOIN at DB level
+    // Single query returns all active students; NULL fee cols → NO_RECORD
     // ═══════════════════════════════════════════════════════════════════
     public AllStudentsFeeStatusResponse getAllStudentsFeeStatus(Integer month, Integer year) {
-        List<FeeRecord> records = feeRecordRepository.findByFeeMonthAndFeeYear(month, year);
 
-        long paid    = records.stream().filter(r -> "PAID".equals(r.getPaymentStatus())).count();
-        long pending = records.stream().filter(r -> "PENDING".equals(r.getPaymentStatus())).count();
-        long partial = records.stream().filter(r -> "PARTIAL".equals(r.getPaymentStatus())).count();
+        // One DB call — LEFT JOIN done by database, not Java
+        List<AllStudentFeeProjection> projections = studentRepository.findAllStudentsFeeStatus(month, year);
 
-        BigDecimal totalExpected  = records.stream().map(FeeRecord::getFinalFee).reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal totalCollected = records.stream().map(FeeRecord::getPaidAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal totalBalance   = records.stream().map(FeeRecord::getBalanceAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+        long paid = 0, pending = 0, partial = 0, noRecord = 0;
+        BigDecimal totalExpected  = BigDecimal.ZERO;
+        BigDecimal totalCollected = BigDecimal.ZERO;
+        BigDecimal totalBalance   = BigDecimal.ZERO;
 
-        List<AllStudentsFeeStatusResponse.StudentFeeDetail> students = records.stream()
-                .map(r -> AllStudentsFeeStatusResponse.StudentFeeDetail.builder()
-                        .regNo(r.getRegNo())
-                        .studentName(studentRepository.findById(r.getRegNo())
-                                .map(Student::getName).orElse("Unknown"))
-                        .timeSlot(r.getInTime().format(TIME_FMT) + " - " + r.getOutTime().format(TIME_FMT))
-                        .finalFee(r.getFinalFee()).paidAmount(r.getPaidAmount())
-                        .balanceAmount(r.getBalanceAmount()).paymentStatus(r.getPaymentStatus())
-                        .paymentMode(r.getPaymentMode()).receiptNumber(r.getReceiptNumber())
+        List<AllStudentsFeeStatusResponse.StudentFeeDetail> students = new ArrayList<>();
+
+        for (AllStudentFeeProjection p : projections) {
+
+            String timeSlot = null;
+            if (p.getInTime() != null && p.getOutTime() != null) {
+                timeSlot = p.getInTime().format(TIME_FMT) + " - " + p.getOutTime().format(TIME_FMT);
+            }
+
+            String status = p.getPaymentStatus(); // NULL from DB when LEFT JOIN found no record
+
+            if (status == null) {
+                noRecord++;
+                status = "NO_RECORD";
+            } else {
+                if ("PAID".equals(status))         paid++;
+                else if ("PARTIAL".equals(status)) partial++;
+                else                               pending++;
+
+                if (p.getFinalFee()      != null) totalExpected  = totalExpected.add(p.getFinalFee());
+                if (p.getPaidAmount()    != null) totalCollected = totalCollected.add(p.getPaidAmount());
+                if (p.getBalanceAmount() != null) totalBalance   = totalBalance.add(p.getBalanceAmount());
+            }
+
+            students.add(AllStudentsFeeStatusResponse.StudentFeeDetail.builder()
+                    .regNo(p.getRegNo()).studentName(p.getName()).timeSlot(timeSlot)
+                    .finalFee(p.getFinalFee()).paidAmount(p.getPaidAmount()).balanceAmount(p.getBalanceAmount())
+                    .paymentStatus(status).paymentMode(p.getPaymentMode()).receiptNumber(p.getReceiptNumber())
+                    .build());
+        }
+
+        return AllStudentsFeeStatusResponse.builder()
+                .month(month).year(year).totalStudents(projections.size())
+                .paidCount(paid).pendingCount(pending).partialCount(partial).noRecordCount(noRecord)
+                .totalFeeExpected(totalExpected).totalCollected(totalCollected).totalBalance(totalBalance)
+                .students(students).build();
+    }
+    // ── END ENHANCEMENT #3 ───────────────────────────────────────────────────
+
+    // ═══════════════════════════════════════════════════════════════════
+    // ENHANCEMENT #4: STUDENTS WITH NO FEE CONFIG
+    // Single LEFT JOIN query — DB returns only those with no active config
+    // ═══════════════════════════════════════════════════════════════════
+    public NoConfigStudentsResponse getStudentsWithNoConfig() {
+        log.info("Fetching active students with no fee config");
+
+        List<NoFeeConfigProjection> projections = studentRepository.findActiveStudentsWithNoConfig();
+
+        List<NoConfigStudentsResponse.StudentInfo> students = projections.stream()
+                .map(p -> NoConfigStudentsResponse.StudentInfo.builder()
+                        .regNo(p.getRegNo())
+                        .name(p.getName())
+                        .mobile(p.getMobile())
+                        .timeSlot(p.getInTime() != null && p.getOutTime() != null
+                                ? p.getInTime().format(TIME_FMT) + " - " + p.getOutTime().format(TIME_FMT)
+                                : null)
+                        .dateOfAdmission(p.getDateOfAdmission() != null ? p.getDateOfAdmission().toString() : null)
                         .build())
                 .toList();
 
-        return AllStudentsFeeStatusResponse.builder()
-                .month(month).year(year).totalStudents(records.size())
-                .paidCount(paid).pendingCount(pending).partialCount(partial)
-                .totalFeeExpected(totalExpected).totalCollected(totalCollected).totalBalance(totalBalance)
+        String message = students.isEmpty()
+                ? "All active students have fee config locked. ✅"
+                : students.size() + " active student(s) have no fee config. Lock their fee from the Fee Calculate page.";
+
+        log.info("No-config students: {}", students.size());
+
+        return NoConfigStudentsResponse.builder()
+                .count(students.size())
+                .message(message)
                 .students(students)
                 .build();
     }
+    // ── END ENHANCEMENT #4 ───────────────────────────────────────────────────
 
     // ═══════════════════════════════════════════════════════════════════
-    // MONTHLY COLLECTION
+    // MONTHLY + DATE-RANGE COLLECTION (unchanged)
     // ═══════════════════════════════════════════════════════════════════
     public FeeCollectionResponse getMonthlyCollection(Integer month, Integer year) {
         List<FeeRecord> records = feeRecordRepository.findByFeeMonthAndFeeYear(month, year);
-
         return FeeCollectionResponse.builder()
                 .period(String.format("%02d/%d", month, year))
                 .totalStudents(records.size())
@@ -549,15 +500,10 @@ public class FeeService {
                 .build();
     }
 
-    // ═══════════════════════════════════════════════════════════════════
-    // DATE RANGE COLLECTION
-    // ═══════════════════════════════════════════════════════════════════
     public FeeCollectionResponse getCollectionByDateRange(LocalDate startDate, LocalDate endDate) {
         if (startDate.isAfter(endDate))
             throw new InvalidRequestException("startDate must be before endDate");
-
         List<FeeRecord> records = feeRecordRepository.findByPaymentDateBetween(startDate, endDate);
-
         return FeeCollectionResponse.builder()
                 .period(startDate + " to " + endDate)
                 .totalStudents(records.size())
@@ -572,81 +518,48 @@ public class FeeService {
                 .build();
     }
 
-    private String generateReceiptNumber(Integer month, Integer year) {
-        long count = feeRecordRepository.countReceiptsByMonthAndYear(month, year);
-        return String.format("REC-%d-%02d-%03d", year, month, count + 1);
-    }
-
-   // ═══════════════════════════════════════════════════════════════════
-    // ENHANCEMENT #2: GENERATE ALL FEES FOR A MONTH
-    // Called by admin at start of each month via POST /fees/generate-all
-    // Loops all active students → skips if record exists → creates from config
-    // Idempotent: safe to call multiple times, never overwrites existing records
+    // ═══════════════════════════════════════════════════════════════════
+    // ENHANCEMENT #2: GENERATE ALL FEES FOR A MONTH (unchanged)
     // ═══════════════════════════════════════════════════════════════════
     @Transactional
     public GenerateAllFeesResponse generateAllFeesForMonth(int month, int year) {
-
         log.info("Generating all fees for {}/{}", month, year);
 
         List<Student> activeStudents = studentRepository.findByIsActiveTrue();
-
-        int generated = 0;
-        int skipped   = 0;
-        int noConfig  = 0;
-        List<Long> noConfigRegNos = new java.util.ArrayList<>();
-
+        int generated = 0, skipped = 0, noConfig = 0;
+        List<Long> noConfigRegNos = new ArrayList<>();
         LocalDate firstOfMonth = LocalDate.of(year, month, 1);
 
         for (Student student : activeStudents) {
             Long regNo = student.getRegNo();
-
-            // Check if student has an active fee config
-            Optional<StudentFeeConfig> configOpt =
-                    feeConfigRepository.findByRegNoAndEffectiveToDateIsNull(regNo);
+            Optional<StudentFeeConfig> configOpt = feeConfigRepository.findByRegNoAndEffectiveToDateIsNull(regNo);
 
             if (configOpt.isEmpty()) {
-                // Fee was never locked for this student — admin needs to fix manually
                 noConfig++;
                 noConfigRegNos.add(regNo);
                 log.warn("No fee config for regNo={} — skipping", regNo);
                 continue;
             }
 
-            // Check if fee record already exists for this month/year
             if (feeRecordRepository.existsByRegNoAndFeeMonthAndFeeYear(regNo, month, year)) {
                 skipped++;
-                log.debug("Fee record already exists for regNo={} for {}/{} — skipping", regNo, month, year);
                 continue;
             }
 
-            // Generate fee record from stored config — always full month, no admission fee
             StudentFeeConfig config = configOpt.get();
-
             FeeCalculateResponse calc = calculateFeeInternal(
-                    config.getInTime().format(TIME_FMT),
-                    config.getOutTime().format(TIME_FMT),
-                    firstOfMonth,               // 1st of month = full month, no pro-ration
-                    config.getDiscountAmount(),
-                    BigDecimal.ZERO);            // admission fee only on first lock, never again
+                    config.getInTime().format(TIME_FMT), config.getOutTime().format(TIME_FMT),
+                    firstOfMonth, config.getDiscountAmount(), BigDecimal.ZERO);
 
             FeeRecord record = FeeRecord.builder()
-                    .regNo(regNo)
-                    .configId(config.getConfigId())
-                    .feeMonth(month).feeYear(year)
-                    .inTime(config.getInTime()).outTime(config.getOutTime())
-                    .totalDaysInMonth(calc.getTotalDaysInMonth())
-                    .applicableDays(calc.getApplicableDays())
+                    .regNo(regNo).configId(config.getConfigId())
+                    .feeMonth(month).feeYear(year).inTime(config.getInTime()).outTime(config.getOutTime())
+                    .totalDaysInMonth(calc.getTotalDaysInMonth()).applicableDays(calc.getApplicableDays())
                     .joiningDateInMonth(firstOfMonth)
-                    .monthlyFee(calc.getMonthlyFee())
-                    .proratedFee(calc.getProratedFee())
-                    .admissionFee(BigDecimal.ZERO)
-                    .discountAmount(calc.getDiscountAmount())
-                    .finalFee(calc.getFinalFee())
-                    .paidAmount(BigDecimal.ZERO)
-                    .balanceAmount(calc.getFinalFee())
-                    .paymentStatus("PENDING")
-                    .createdAt(LocalDateTime.now())
-                    .build();
+                    .monthlyFee(calc.getMonthlyFee()).proratedFee(calc.getProratedFee())
+                    .admissionFee(BigDecimal.ZERO).discountAmount(calc.getDiscountAmount())
+                    .finalFee(calc.getFinalFee()).paidAmount(BigDecimal.ZERO).balanceAmount(calc.getFinalFee())
+                    .paymentStatus("PENDING").createdAt(LocalDateTime.now()).build();
 
             feeRecordRepository.save(record);
             generated++;
@@ -659,18 +572,165 @@ public class FeeService {
         log.info(message);
 
         return GenerateAllFeesResponse.builder()
-                .month(month).year(year)
-                .totalActiveStudents(activeStudents.size())
-                .generated(generated)
-                .skipped(skipped)
-                .noConfig(noConfig)
-                .noConfigRegNos(noConfigRegNos)
-                .message(message)
-                .build();
+                .month(month).year(year).totalActiveStudents(activeStudents.size())
+                .generated(generated).skipped(skipped).noConfig(noConfig)
+                .noConfigRegNos(noConfigRegNos).message(message).build();
     }
-    // ── END ENHANCEMENT #2 ───────────────────────────────────────────────────
 
+    // ═══════════════════════════════════════════════════════════════════
+    // ENHANCEMENT #5: BULK PAYMENT
+    // Processes multiple payments in one @Transactional call.
+    // If ANY student fails validation, entire batch rolls back.
+    // ═══════════════════════════════════════════════════════════════════
+    @Transactional
+    public BulkPaymentResponse bulkPayment(BulkPaymentRequest request) {
+        log.info("Bulk payment: month={}/{}, mode={}, students={}",
+                request.getFeeMonth(), request.getFeeYear(),
+                request.getPaymentMode(), request.getPayments().size());
 
+        String mode = request.getPaymentMode().toUpperCase();
+        if (!"CASH".equals(mode) && !"ONLINE".equals(mode))
+            throw new InvalidRequestException("paymentMode must be CASH or ONLINE");
 
+        if (request.getPayments() == null || request.getPayments().isEmpty())
+            throw new InvalidRequestException("Payment list cannot be empty");
+
+        List<BulkPaymentResponse.PaymentResult> results = new ArrayList<>();
+        BigDecimal totalCollected = BigDecimal.ZERO;
+
+        for (BulkPaymentRequest.PaymentItem item : request.getPayments()) {
+
+            Student student = studentRepository.findById(item.getRegNo())
+                    .orElseThrow(() -> new InvalidRequestException("Student " + item.getRegNo() + " not found"));
+
+            FeeRecord record = feeRecordRepository
+                    .findByRegNoAndFeeMonthAndFeeYear(item.getRegNo(), request.getFeeMonth(), request.getFeeYear())
+                    .orElseThrow(() -> new InvalidRequestException(
+                            "No fee record for Reg#" + item.getRegNo()
+                            + " for " + request.getFeeMonth() + "/" + request.getFeeYear()));
+
+            if ("PAID".equals(record.getPaymentStatus()))
+                throw new InvalidRequestException("Fee already PAID for Reg#" + item.getRegNo());
+
+            BigDecimal payAmount = item.getAmount();
+            if (payAmount == null || payAmount.compareTo(BigDecimal.ZERO) <= 0)
+                throw new InvalidRequestException("Amount must be > 0 for Reg#" + item.getRegNo());
+            if (payAmount.compareTo(record.getBalanceAmount()) > 0)
+                throw new InvalidRequestException(
+                        "Amount Rs." + payAmount + " exceeds balance Rs." + record.getBalanceAmount()
+                        + " for Reg#" + item.getRegNo());
+
+            BigDecimal newPaid    = record.getPaidAmount().add(payAmount);
+            BigDecimal newBalance = record.getFinalFee().subtract(newPaid);
+            String newStatus      = newBalance.compareTo(BigDecimal.ZERO) <= 0 ? "PAID" : "PARTIAL";
+            if (newBalance.compareTo(BigDecimal.ZERO) < 0) newBalance = BigDecimal.ZERO;
+
+            String receipt = generateReceiptNumber(request.getFeeMonth(), request.getFeeYear());
+            record.setPaidAmount(newPaid);
+            record.setBalanceAmount(newBalance);
+            record.setPaymentStatus(newStatus);
+            record.setPaymentMode(mode);
+            record.setPaymentDate(LocalDate.now());
+            record.setReceiptNumber(receipt);
+            feeRecordRepository.save(record);
+
+            totalCollected = totalCollected.add(payAmount);
+
+            results.add(BulkPaymentResponse.PaymentResult.builder()
+                    .regNo(item.getRegNo()).studentName(student.getName())
+                    .amountPaid(payAmount).balanceRemaining(newBalance)
+                    .paymentStatus(newStatus).receiptNumber(receipt).build());
+
+            log.info("Bulk pay: regNo={}, amount={}, status={}", item.getRegNo(), payAmount, newStatus);
+        }
+
+        return BulkPaymentResponse.builder()
+                .message("Bulk payment processed for " + results.size() + " students!")
+                .feeMonth(request.getFeeMonth()).feeYear(request.getFeeYear())
+                .paymentMode(mode).totalStudents(results.size())
+                .totalAmountCollected(totalCollected)
+                .paymentDate(LocalDate.now().toString())
+                .results(results).build();
+    }
+    // ── END ENHANCEMENT #5 ───────────────────────────────────────────────────
+
+    // ═══════════════════════════════════════════════════════════════════
+    // ENHANCEMENT #6: REVERSE PAYMENT
+    // Resets a PAID or PARTIAL fee record back to PENDING.
+    // Use when admin recorded payment against wrong student or wrong amount.
+    // ═══════════════════════════════════════════════════════════════════
+    @Transactional
+    public ReversePaymentResponse reversePayment(Long feeId, String remarks) {
+        log.info("Reversing payment: feeId={}", feeId);
+
+        FeeRecord record = feeRecordRepository.findById(feeId)
+                .orElseThrow(() -> new InvalidRequestException("Fee record not found: feeId=" + feeId));
+
+        if ("PENDING".equals(record.getPaymentStatus()))
+            throw new InvalidRequestException("Fee record is already PENDING — nothing to reverse.");
+
+        Student student = studentRepository.findById(record.getRegNo())
+                .orElseThrow(() -> new StudentNotFoundException("Student " + record.getRegNo() + " not found."));
+
+        BigDecimal reversedAmount = record.getPaidAmount(); // how much is being undone
+
+        // Reset all payment fields — fee record goes back to clean PENDING state
+        record.setPaidAmount(BigDecimal.ZERO);
+        record.setBalanceAmount(record.getFinalFee());
+        record.setPaymentStatus("PENDING");
+        record.setPaymentMode(null);
+        record.setPaymentDate(null);
+        record.setReceiptNumber(null);
+        record.setRemarks(remarks != null ? "REVERSED: " + remarks : "REVERSED by admin");
+        feeRecordRepository.save(record);
+
+        log.info("Payment reversed: feeId={}, regNo={}, amount={}", feeId, record.getRegNo(), reversedAmount);
+
+        return ReversePaymentResponse.builder()
+                .message("Payment of Rs." + reversedAmount + " reversed. Fee status reset to PENDING.")
+                .feeId(feeId).regNo(record.getRegNo()).studentName(student.getName())
+                .feeMonth(record.getFeeMonth()).feeYear(record.getFeeYear())
+                .reversedAmount(reversedAmount).finalFee(record.getFinalFee())
+                .newStatus("PENDING").remarks(record.getRemarks()).build();
+    }
+    // ── END ENHANCEMENT #6 ───────────────────────────────────────────────────
+
+    private String generateReceiptNumber(Integer month, Integer year) {
+        long count = feeRecordRepository.countReceiptsByMonthAndYear(month, year);
+        return String.format("REC-%d-%02d-%03d", year, month, count + 1);
+    }
     
+    // ─── E7: Get receipt by receipt number ───────────────────────────────────
+public ReceiptResponse getReceipt(String receiptNumber) {
+    FeeRecord record = feeRecordRepository.findByReceiptNumber(receiptNumber)
+        .orElseThrow(() -> new InvalidRequestException(
+            "No receipt found with number: " + receiptNumber));
+
+    Student student = studentRepository.findById(record.getRegNo())
+        .orElseThrow(() -> new StudentNotFoundException(
+            "Student not found for reg no: " + record.getRegNo()));
+
+    String timeSlot = null;
+    if (student.getInTime() != null && student.getOutTime() != null) {
+        timeSlot = student.getInTime().format(TIME_FMT)
+                 + " - "
+                 + student.getOutTime().format(TIME_FMT);
+    }
+
+    return ReceiptResponse.builder()
+        .receiptNumber(record.getReceiptNumber())
+        .regNo(record.getRegNo())
+        .studentName(student.getName())
+        .feeMonth(record.getFeeMonth())
+        .feeYear(record.getFeeYear())
+        .finalFee(record.getFinalFee())
+        .amountPaid(record.getPaidAmount())
+        .balanceAmount(record.getBalanceAmount())
+        .paymentStatus(record.getPaymentStatus())
+        .paymentMode(record.getPaymentMode())
+        .paymentDate(record.getPaymentDate() != null
+            ? record.getPaymentDate().toString() : null)
+        .timeSlot(timeSlot)
+        .build();
+}
 }
