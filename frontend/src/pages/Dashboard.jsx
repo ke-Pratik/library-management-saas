@@ -4,39 +4,13 @@ import {
   getSeatStatus,
   getMonthlyCollection,
 } from "../services/api";
+import { FaUsers, FaChair, FaRupeeSign, FaQuestionCircle } from "react-icons/fa";
 import {
-  FaUsers,
-  FaChair,
-  FaRupeeSign,
-  FaQuestionCircle,
-} from "react-icons/fa";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-  Legend,
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  PieChart, Pie, Cell, Legend,
 } from "recharts";
 
-const MONTH_NAMES = [
-  "Jan",
-  "Feb",
-  "Mar",
-  "Apr",
-  "May",
-  "Jun",
-  "Jul",
-  "Aug",
-  "Sep",
-  "Oct",
-  "Nov",
-  "Dec",
-];
+const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const PIE_COLORS = ["#dc3545", "#198754"]; // Occupied = red, Vacant = green
 
 function Dashboard() {
@@ -65,15 +39,12 @@ function Dashboard() {
         getStudentSummary(),
         getSeatStatus(),
         getMonthlyCollection({ month: currentMonth, year: currentYear }),
-        ...months.map(({ month, year }) =>
-          getMonthlyCollection({ month, year }),
-        ),
+        ...months.map(({ month, year }) => getMonthlyCollection({ month, year })),
       ]);
 
       if (results[0].status === "fulfilled") setStudents(results[0].value.data);
       if (results[1].status === "fulfilled") setSeats(results[1].value.data);
-      if (results[2].status === "fulfilled")
-        setCollection(results[2].value.data);
+      if (results[2].status === "fulfilled") setCollection(results[2].value.data);
 
       const trend = months.map(({ month, year }, idx) => ({
         label: `${MONTH_NAMES[month - 1]} '${String(year).slice(2)}`,
@@ -102,12 +73,12 @@ function Dashboard() {
     (collection.pendingCount || 0);
   const noFeeRecord = Math.max(
     0,
-    (students.activeStudents || 0) - studentsWithRecord,
+    (students.activeStudents || 0) - studentsWithRecord
   );
 
   const seatPieData = [
     { name: "Occupied", value: seats.occupiedSeats || 0 },
-    { name: "Vacant", value: seats.vacantSeats || 0 },
+    { name: "Vacant",   value: seats.vacantSeats   || 0 },
   ];
 
   if (loading)
@@ -228,15 +199,21 @@ function Dashboard() {
               <h5 className="fw-bold">Seats</h5>
               <div className="row mt-3">
                 <div className="col">
-                  <h3 className="text-success">{seats.vacantSeats || 0}</h3>
+                  <h3 className="text-success">
+                    {seats.vacantSeats || 0}
+                  </h3>
                   <small className="text-muted">Vacant</small>
                 </div>
                 <div className="col">
-                  <h3 className="text-danger">{seats.occupiedSeats || 0}</h3>
+                  <h3 className="text-danger">
+                    {seats.occupiedSeats || 0}
+                  </h3>
                   <small className="text-muted">Occupied</small>
                 </div>
                 <div className="col">
-                  <h3 className="text-primary">{seats.totalSeats || 0}</h3>
+                  <h3 className="text-primary">
+                    {seats.totalSeats || 0}
+                  </h3>
                   <small className="text-muted">Total</small>
                 </div>
               </div>
@@ -316,7 +293,9 @@ function Dashboard() {
                     <XAxis dataKey="label" tick={{ fontSize: 12 }} />
                     <YAxis
                       tickFormatter={(v) =>
-                        v >= 1000 ? `₹${(v / 1000).toFixed(0)}k` : `₹${v}`
+                        v >= 1000
+                          ? `₹${(v / 1000).toFixed(0)}k`
+                          : `₹${v}`
                       }
                       tick={{ fontSize: 12 }}
                     />
