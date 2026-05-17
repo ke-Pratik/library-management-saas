@@ -87,6 +87,7 @@ public class FeeRecord {
     @Column(name = "receipt_number")
     private String receiptNumber;
 
+    @Column(name = "remarks")
     private String remarks;
 
     @Column(name = "created_at")
