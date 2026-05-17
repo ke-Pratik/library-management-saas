@@ -20,6 +20,7 @@ public class AllStudentsFeeStatusResponse {
     private long paidCount;
     private long pendingCount;
     private long partialCount;
+    private long noRecordCount;      // ← ENHANCEMENT #3: students with no fee record this month
     private BigDecimal totalFeeExpected;
     private BigDecimal totalCollected;
     private BigDecimal totalBalance;
@@ -33,10 +34,10 @@ public class AllStudentsFeeStatusResponse {
         private Long regNo;
         private String studentName;
         private String timeSlot;
-        private BigDecimal finalFee;
-        private BigDecimal paidAmount;
-        private BigDecimal balanceAmount;
-        private String paymentStatus;
+        private BigDecimal finalFee;       // null if NO_RECORD
+        private BigDecimal paidAmount;     // null if NO_RECORD
+        private BigDecimal balanceAmount;  // null if NO_RECORD
+        private String paymentStatus;      // PAID / PARTIAL / PENDING / NO_RECORD
         private String paymentMode;
         private String receiptNumber;
     }
