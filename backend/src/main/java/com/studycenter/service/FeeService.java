@@ -24,6 +24,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.studycenter.dto.GenerateAllFeesResponse;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -575,4 +576,101 @@ public class FeeService {
         long count = feeRecordRepository.countReceiptsByMonthAndYear(month, year);
         return String.format("REC-%d-%02d-%03d", year, month, count + 1);
     }
+
+   // ═══════════════════════════════════════════════════════════════════
+    // ENHANCEMENT #2: GENERATE ALL FEES FOR A MONTH
+    // Called by admin at start of each month via POST /fees/generate-all
+    // Loops all active students → skips if record exists → creates from config
+    // Idempotent: safe to call multiple times, never overwrites existing records
+    // ═══════════════════════════════════════════════════════════════════
+    @Transactional
+    public GenerateAllFeesResponse generateAllFeesForMonth(int month, int year) {
+
+        log.info("Generating all fees for {}/{}", month, year);
+
+        List<Student> activeStudents = studentRepository.findByIsActiveTrue();
+
+        int generated = 0;
+        int skipped   = 0;
+        int noConfig  = 0;
+        List<Long> noConfigRegNos = new java.util.ArrayList<>();
+
+        LocalDate firstOfMonth = LocalDate.of(year, month, 1);
+
+        for (Student student : activeStudents) {
+            Long regNo = student.getRegNo();
+
+            // Check if student has an active fee config
+            Optional<StudentFeeConfig> configOpt =
+                    feeConfigRepository.findByRegNoAndEffectiveToDateIsNull(regNo);
+
+            if (configOpt.isEmpty()) {
+                // Fee was never locked for this student — admin needs to fix manually
+                noConfig++;
+                noConfigRegNos.add(regNo);
+                log.warn("No fee config for regNo={} — skipping", regNo);
+                continue;
+            }
+
+            // Check if fee record already exists for this month/year
+            if (feeRecordRepository.existsByRegNoAndFeeMonthAndFeeYear(regNo, month, year)) {
+                skipped++;
+                log.debug("Fee record already exists for regNo={} for {}/{} — skipping", regNo, month, year);
+                continue;
+            }
+
+            // Generate fee record from stored config — always full month, no admission fee
+            StudentFeeConfig config = configOpt.get();
+
+            FeeCalculateResponse calc = calculateFeeInternal(
+                    config.getInTime().format(TIME_FMT),
+                    config.getOutTime().format(TIME_FMT),
+                    firstOfMonth,               // 1st of month = full month, no pro-ration
+                    config.getDiscountAmount(),
+                    BigDecimal.ZERO);            // admission fee only on first lock, never again
+
+            FeeRecord record = FeeRecord.builder()
+                    .regNo(regNo)
+                    .configId(config.getConfigId())
+                    .feeMonth(month).feeYear(year)
+                    .inTime(config.getInTime()).outTime(config.getOutTime())
+                    .totalDaysInMonth(calc.getTotalDaysInMonth())
+                    .applicableDays(calc.getApplicableDays())
+                    .joiningDateInMonth(firstOfMonth)
+                    .monthlyFee(calc.getMonthlyFee())
+                    .proratedFee(calc.getProratedFee())
+                    .admissionFee(BigDecimal.ZERO)
+                    .discountAmount(calc.getDiscountAmount())
+                    .finalFee(calc.getFinalFee())
+                    .paidAmount(BigDecimal.ZERO)
+                    .balanceAmount(calc.getFinalFee())
+                    .paymentStatus("PENDING")
+                    .createdAt(LocalDateTime.now())
+                    .build();
+
+            feeRecordRepository.save(record);
+            generated++;
+            log.info("Fee generated: regNo={}, month={}/{}, fee={}", regNo, month, year, calc.getFinalFee());
+        }
+
+        String message = String.format(
+                "Fee generation complete for %02d/%d — Generated: %d | Skipped: %d | No Config: %d",
+                month, year, generated, skipped, noConfig);
+        log.info(message);
+
+        return GenerateAllFeesResponse.builder()
+                .month(month).year(year)
+                .totalActiveStudents(activeStudents.size())
+                .generated(generated)
+                .skipped(skipped)
+                .noConfig(noConfig)
+                .noConfigRegNos(noConfigRegNos)
+                .message(message)
+                .build();
+    }
+    // ── END ENHANCEMENT #2 ───────────────────────────────────────────────────
+
+
+
+    
 }
