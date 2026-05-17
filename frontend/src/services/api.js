@@ -71,5 +71,7 @@ export const getMonthlyCollection = (params) =>
   API.get("/fees/collection/monthly", { params });
 export const getCollectionByRange = (params) =>
   API.get("/fees/collection/range", { params });
+// ── ENHANCEMENT #2: Bulk generate fees for all active students ──
+export const generateAllFees = (params) => API.post("/fees/generate-all", null, { params });
 
 export default API;

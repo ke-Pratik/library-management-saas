@@ -7,6 +7,7 @@ import com.studycenter.dto.FeeLockRequest;
 import com.studycenter.dto.FeePaymentRequest;
 import com.studycenter.dto.FeePaymentResponse;
 import com.studycenter.dto.FeePreviewRequest;
+import com.studycenter.dto.GenerateAllFeesResponse; // ← ENHANCEMENT #2
 import com.studycenter.dto.StudentFeeStatusResponse;
 import com.studycenter.service.FeeService;
 import jakarta.validation.Valid;
@@ -40,17 +41,29 @@ public class FeeController {
         return new ResponseEntity<>(feeService.lockFee(req), HttpStatus.CREATED);
     }
 
-     // Auto-generate current month fee record from saved config
+    // Auto-generate current month fee record from saved config
     // Called by FeePayment page on student selection
     @PostMapping("/auto-generate/{regNo}")
     public ResponseEntity<?> autoGenerate(@PathVariable Long regNo) {
         FeeCalculateResponse result = feeService.autoGenerateCurrentMonthFee(regNo);
         if (result == null) {
-            // Record already existed — not an error
             return ResponseEntity.ok(Map.of("message", "Fee record already exists for current month."));
         }
         return new ResponseEntity<>(result, HttpStatus.CREATED);
     }
+
+    // ── ENHANCEMENT #2: Bulk generate fees for all active students for a month ──
+    // Idempotent — already-existing records are never touched
+    // Usage: POST /api/fees/generate-all?month=6&year=2026
+    @PostMapping("/generate-all")
+    public ResponseEntity<GenerateAllFeesResponse> generateAll(
+            @RequestParam Integer month,
+            @RequestParam Integer year) {
+        return new ResponseEntity<>(
+                feeService.generateAllFeesForMonth(month, year),
+                HttpStatus.CREATED);
+    }
+    // ── END ENHANCEMENT #2 ────────────────────────────────────────────────────
 
     @PostMapping("/pay")
     public ResponseEntity<FeePaymentResponse> pay(
