@@ -16,6 +16,7 @@ public interface StudentRepository extends JpaRepository<Student, Long> {
     List<Student> findByIsActiveTrue();
     List<Student> findByIsActiveFalse();
     boolean existsByAadhaarNo(String aadhaarNo);
+    boolean existsByAadhaarNoAndRegNoNot(String aadhaarNo, Long regNo);
     long countByIsActiveTrue();
     long countByIsActiveFalse();
 
