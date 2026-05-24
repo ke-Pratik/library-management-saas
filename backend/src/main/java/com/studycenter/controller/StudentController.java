@@ -4,6 +4,8 @@ import com.studycenter.dto.ActiveStudentsPageResponse;
 import com.studycenter.dto.DeactivateReactivateRequest;
 import com.studycenter.dto.DeactivateReactivateResponse;
 import com.studycenter.dto.StudentDetailResponse;
+import com.studycenter.dto.StudentEditRequest;
+import com.studycenter.dto.StudentEditResponse;
 import com.studycenter.dto.StudentRegisterRequest;
 import com.studycenter.dto.StudentRegisterResponse;
 import com.studycenter.dto.StudentSummaryResponse;
@@ -45,7 +47,7 @@ public class StudentController {
 
     @GetMapping("/active")
     public ResponseEntity<ActiveStudentsPageResponse> active(
-            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "0")  int page,
             @RequestParam(defaultValue = "10") int size) {
         return ResponseEntity.ok(studentService.getActiveStudentsPaged(page, size));
     }
@@ -65,5 +67,17 @@ public class StudentController {
             @RequestParam String type,
             @RequestParam String value) {
         return ResponseEntity.ok(studentService.searchStudents(type, value));
+    }
+
+    @GetMapping("/{regNo}")
+    public ResponseEntity<StudentDetailResponse> getById(@PathVariable Long regNo) {
+        return ResponseEntity.ok(studentService.getStudentById(regNo));
+    }
+
+    @PutMapping("/{regNo}")
+    public ResponseEntity<StudentEditResponse> edit(
+            @PathVariable Long regNo,
+            @Valid @RequestBody StudentEditRequest request) {
+        return ResponseEntity.ok(studentService.editStudent(regNo, request));
     }
 }

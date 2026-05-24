@@ -52,4 +52,5 @@ public interface FeeRecordRepository extends JpaRepository<FeeRecord, Long> {
 
     @Query("SELECT COUNT(f) FROM FeeRecord f WHERE f.feeMonth = :month AND f.feeYear = :year AND f.receiptNumber IS NOT NULL")
     long countReceiptsByMonthAndYear(@Param("month") Integer month, @Param("year") Integer year);
+
 }
