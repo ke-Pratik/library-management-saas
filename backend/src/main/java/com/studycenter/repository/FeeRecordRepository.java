@@ -52,4 +52,16 @@ public interface FeeRecordRepository extends JpaRepository<FeeRecord, Long> {
 
     @Query("SELECT COUNT(f) FROM FeeRecord f WHERE f.feeMonth = :month AND f.feeYear = :year AND f.receiptNumber IS NOT NULL")
     long countReceiptsByMonthAndYear(@Param("month") Integer month, @Param("year") Integer year);
+
+    
+// Previous months that still have unpaid/partial balance
+@Query("SELECT f FROM FeeRecord f " +
+       "WHERE f.regNo = :regNo " +
+       "AND (f.feeYear < :year OR (f.feeYear = :year AND f.feeMonth < :month)) " +
+       "AND f.paymentStatus IN ('PENDING', 'PARTIAL') " +
+       "ORDER BY f.feeYear ASC, f.feeMonth ASC")
+List<FeeRecord> findPreviousUnpaidRecords(
+    @Param("regNo")  Long regNo,
+    @Param("month")  int month,
+    @Param("year")   int year);	
 }
