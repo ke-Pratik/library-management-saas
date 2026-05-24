@@ -30,8 +30,4 @@ public class StudentEditRequest {
     private String mobile;
 
     private String remarks;
-
-    // Optional — if provided AND different from current, triggers Case 2 (slot change)
-    private String inTime;
-    private String outTime;
 }
