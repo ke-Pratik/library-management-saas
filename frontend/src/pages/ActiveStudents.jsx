@@ -127,10 +127,13 @@ function ActiveStudents() {
     }
   };
 
-  const feeStatusBadge = (status) =>
-    status === "PAID"
-      ? <span className="badge bg-success">✅ PAID</span>
-      : <span className="badge bg-danger">🔴 DUES</span>;
+ const feeStatusBadge = (status) => {
+  if (status === "PAID")
+    return <span className="badge bg-success">✅ PAID</span>;
+  if (status === "PARTIAL")
+    return <span className="badge bg-warning text-dark">🔶 PARTIAL</span>;
+  return <span className="badge bg-danger">🔴 DUES</span>;
+};
 
   return (
     <div>
