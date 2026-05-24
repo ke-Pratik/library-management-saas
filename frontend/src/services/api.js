@@ -42,6 +42,8 @@ export const reactivateStudent = (data) =>
   API.put("/students/reactivate", data);
 export const searchStudents = (type, value) =>
   API.get("/students/search", { params: { type, value } });
+export const getStudentByRegNo = (regNo) => API.get(`/students/${regNo}`);
+export const editStudent       = (regNo, data) => API.put(`/students/${regNo}`, data);
 
 // ═══════════════════════════════════════════
 // SEAT APIs
