@@ -66,4 +66,22 @@ public class StudentController {
             @RequestParam String value) {
         return ResponseEntity.ok(studentService.searchStudents(type, value));
     }
+    import com.studycenter.dto.StudentEditRequest;
+import com.studycenter.dto.StudentEditResponse;
+
+// Add these two endpoints inside StudentController:
+
+// Edit Student — fetch full details for pre-filling the edit form
+@GetMapping("/{regNo}")
+public ResponseEntity<StudentDetailResponse> getStudent(@PathVariable Long regNo) {
+    return ResponseEntity.ok(studentService.getStudentById(regNo));
+}
+
+// Edit Student — save updated fields
+@PutMapping("/{regNo}")
+public ResponseEntity<StudentEditResponse> edit(
+        @PathVariable Long regNo,
+        @Valid @RequestBody StudentEditRequest request) {
+    return ResponseEntity.ok(studentService.editStudent(regNo, request));
+}
 }
