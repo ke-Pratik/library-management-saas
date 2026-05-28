@@ -1128,7 +1128,12 @@ private FeeRecord autoGenerateFutureMonthRecord(Long regNo, int month, int year)
         .build();
     return feeRecordRepository.save(fr);
 }
-
+// ── Get current active fee config for a student (used for pre-filling UI) ──
+public StudentFeeConfig getActiveConfig(Long regNo) {
+    return feeConfigRepository.findByRegNoAndEffectiveToDateIsNull(regNo)
+        .orElseThrow(() -> new InvalidRequestException(
+            "No active fee config found for student " + regNo));
+}
 
     
 }
