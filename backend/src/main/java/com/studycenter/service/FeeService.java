@@ -56,6 +56,9 @@ public class FeeService {
     private final StudentRepository studentRepository;
     private final StudentFeeConfigRepository feeConfigRepository;
     private final SeatBookingRepository seatBookingRepository;
+    private final FeeAdjustmentRepository feeAdjustmentRepository;
+    private final AdjustmentService       adjustmentService;
+    private final WalletService           walletService;
 
     private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("HH:mm");
 
@@ -734,5 +737,12 @@ public ReceiptResponse getReceipt(String receiptNumber) {
             ? record.getPaymentDate().toString() : null)
         .timeSlot(timeSlot)
         .build();
+}
+
+    // ── Status helper ──────────────────────────────────────────
+public static String determineStatus(BigDecimal paid, BigDecimal finalFee) {
+    if (paid.signum() == 0)            return "PENDING";
+    if (paid.compareTo(finalFee) >= 0) return "PAID";
+    return "PARTIAL";
 }
 }
