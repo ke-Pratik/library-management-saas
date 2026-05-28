@@ -35,6 +35,8 @@ import java.util.Map;
 import com.studycenter.dto.AdvancePaymentRequest;
 import com.studycenter.dto.AdvancePaymentResponse;
 import com.studycenter.entity.StudentFeeConfig;
+import java.util.List;
+import com.studycenter.entity.StudentFeeConfig;
 
 @RestController
 @RequestMapping("/api/fees")
