@@ -1,11 +1,16 @@
 package com.studycenter.dto;
 
 import lombok.*;
+
 import java.math.BigDecimal;
 import java.util.List;
 
-@Data @Builder @NoArgsConstructor @AllArgsConstructor
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class SlotChangeResponse {
+
     private String     message;
     private Long       feeId;
     private Long       regNo;
@@ -21,6 +26,13 @@ public class SlotChangeResponse {
     private String     newStatus;
     private BigDecimal walletCreditAdded;
     private String     overpaidNote;
-    private Integer    assignedSeatNo;     // null = manual re-allot needed
+    private Integer    assignedSeatNo;
     private List<String> previousDuesWarning;
+
+    // ── Next-month preview ──────────────────────────
+    private String     newInTime;
+    private String     newOutTime;
+    private BigDecimal newMonthlyFee;
+    private BigDecimal newMonthlyDiscount;
+    private BigDecimal nextMonthFee;   // newMonthlyFee − newMonthlyDiscount
 }
