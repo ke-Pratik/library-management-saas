@@ -27,7 +27,9 @@ import com.studycenter.dto.ReviseFeeRequest;
 import com.studycenter.dto.ReviseFeeResponse;
 import com.studycenter.entity.FeeAdjustment;
 import com.studycenter.service.AdjustmentService;
-
+import com.studycenter.dto.SlotChangeRequest;
+import com.studycenter.dto.SlotChangeResponse;
+import jakarta.validation.Valid;
 import java.time.LocalDate;
 import java.util.Map;
 
@@ -137,6 +139,11 @@ public ResponseEntity<ReviseFeeResponse> reviseFee(
 @GetMapping("/{feeId}/adjustments")
 public ResponseEntity<List<FeeAdjustment>> getAdjustments(@PathVariable Long feeId) {
     return ResponseEntity.ok(adjustmentService.getForFee(feeId));
+}
+
+@PostMapping("/slot-change")
+public ResponseEntity<SlotChangeResponse> slotChange(@Valid @RequestBody SlotChangeRequest request) {
+    return ResponseEntity.ok(feeService.changeSlotForMonth(request));
 }
 
     
