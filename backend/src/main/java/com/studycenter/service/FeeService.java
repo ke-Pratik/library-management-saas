@@ -836,7 +836,7 @@ public ReviseFeeResponse reviseFee(Long feeId, ReviseFeeRequest req) {
     adjustmentService.persist(fr, AdjustmentService.Type.DISCOUNT_REVISED,
             oldVals, adjustmentService.snapshot(fr), req.getReason(), adminUser);
 
-    return ReviseFeeResponse.builder()
+   /* return ReviseFeeResponse.builder()
         .message("Fee revised successfully")
         .feeId(feeId).regNo(fr.getRegNo())
         .oldFinalFee(oldFinal).newFinalFee(newFinalFee)
@@ -844,7 +844,25 @@ public ReviseFeeResponse reviseFee(Long feeId, ReviseFeeRequest req) {
         .oldStatus(oldStatus).newStatus(newStatus)
         .walletCreditAdded(walletCredit)
         .overpaidNote(overpaidNote)
-        .build();
+        .build();*/
+    // ── Next-month bill (monthly fee unchanged, just new discount applied) ──
+BigDecimal nextMonthFee = fr.getMonthlyFee().subtract(newDiscFullMonth)
+    .setScale(2, RoundingMode.HALF_UP);
+if (nextMonthFee.signum() < 0) nextMonthFee = BigDecimal.ZERO;
+
+return ReviseFeeResponse.builder()
+    .message("Fee revised successfully")
+    .feeId(feeId).regNo(fr.getRegNo())
+    .oldFinalFee(oldFinal).newFinalFee(newFinalFee)
+    .oldBalance(oldBalance).newBalance(newBalance)
+    .oldStatus(oldStatus).newStatus(newStatus)
+    .walletCreditAdded(walletCredit)
+    .overpaidNote(overpaidNote)
+    // ── NEW: next-month preview ──
+    .monthlyFee(fr.getMonthlyFee())
+    .newMonthlyDiscount(newDiscFullMonth)
+    .nextMonthFee(nextMonthFee)
+    .build();
 }
 
 private BigDecimal resolveMonthlyFee(LocalTime inTime, LocalTime outTime) {
@@ -1004,7 +1022,7 @@ public SlotChangeResponse changeSlotForMonth(SlotChangeRequest req) {
     adjustmentService.persist(fr, AdjustmentService.Type.SLOT_CHANGED,
         oldVals, adjustmentService.snapshot(fr), req.getReason(), adminUser);
 
-    return SlotChangeResponse.builder()
+    /*return SlotChangeResponse.builder()
         .message(assignedSeatNo != null
             ? "Slot changed. Seat " + assignedSeatNo + " reallotted."
             : "Slot changed. Manual seat re-allotment required.")
@@ -1017,7 +1035,32 @@ public SlotChangeResponse changeSlotForMonth(SlotChangeRequest req) {
         .walletCreditAdded(walletCredit).overpaidNote(overpaidNote)
         .assignedSeatNo(assignedSeatNo)
         .previousDuesWarning(warnings.isEmpty() ? null : warnings)
-        .build();
+        .build();*/
+    // ── Next-month bill at new slot rate ──
+BigDecimal nextMonthFee = newMonthly.subtract(newDiscount)
+    .setScale(2, RoundingMode.HALF_UP);
+if (nextMonthFee.signum() < 0) nextMonthFee = BigDecimal.ZERO;
+
+return SlotChangeResponse.builder()
+    .message(assignedSeatNo != null
+        ? "Slot changed. Seat " + assignedSeatNo + " reallotted."
+        : "Slot changed. Manual seat re-allotment required.")
+    .feeId(fr.getFeeId()).regNo(regNo)
+    .changeDay(changeDay).oldDays(oldDays).newDays(newDays)
+    .oldUsedFee(oldUsedFee).newRemainingFee(newRemainingFee)
+    .admissionFee(admissionFee).revisedFinalFee(revisedFinal)
+    .paidAmount(fr.getPaidAmount()).newBalance(newBalance)
+    .newStatus(newStatus)
+    .walletCreditAdded(walletCredit).overpaidNote(overpaidNote)
+    .assignedSeatNo(assignedSeatNo)
+    .previousDuesWarning(warnings.isEmpty() ? null : warnings)
+    // ── NEW: next-month preview ──
+    .newInTime(req.getNewInTime())
+    .newOutTime(req.getNewOutTime())
+    .newMonthlyFee(newMonthly)
+    .newMonthlyDiscount(newDiscount)
+    .nextMonthFee(nextMonthFee)
+    .build();
 }
 
     // ═══════════════════════════════════════════════════════════════════
