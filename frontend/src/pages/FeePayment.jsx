@@ -7,6 +7,8 @@ import {
   reversePayment,
 } from "../services/api";
 import { toast } from "react-toastify";
+import AdvancePaymentModal from "../components/AdvancePaymentModal";
+import ReviseFeeModal from "../components/ReviseFeeModal";
 
 function FeePayment() {
   const now = new Date();
@@ -41,6 +43,16 @@ function FeePayment() {
   });
   const [payLoading, setPayLoading] = useState(false);
   const [result, setResult] = useState(null);
+
+  // ═══════════════════════════════════════
+  // ADVANCE PAYMENT MODAL (Phase 4)
+  // ═══════════════════════════════════════
+  const [showAdvance, setShowAdvance] = useState(false);
+
+  // ═══════════════════════════════════════
+  // REVISE FEE MODAL (Phase 2 — Case 1)
+  // ═══════════════════════════════════════
+  const [reviseTarget, setReviseTarget] = useState(null);
 
   // ═══════════════════════════════════════
   // SEARCH STUDENTS
@@ -163,6 +175,19 @@ function FeePayment() {
       toast.error(err.response?.data?.message || "Payment failed");
     } finally {
       setPayLoading(false);
+    }
+  };
+
+  // ═══════════════════════════════════════
+  // REFRESH after advance payment / revise
+  // ═══════════════════════════════════════
+  const refreshFeeData = async () => {
+    if (!selectedStudentInfo) return;
+    try {
+      const updated = await getStudentFeeStatus(selectedStudentInfo.regNo);
+      setFeeData(updated.data);
+    } catch {
+      toast.error("Could not refresh fee records");
     }
   };
 
@@ -486,6 +511,7 @@ function FeePayment() {
                       <th>Status</th>
                       <th>Quick Pay</th>
                       <th>Reverse</th>
+                      <th>Revise</th>
                       <th>Reprint</th>
                     </tr>
                   </thead>
@@ -543,6 +569,17 @@ function FeePayment() {
                               )}
                             </button>
                           )}
+                        </td>
+
+                        {/* Revise ← NEW (Phase 2 / Case 1) */}
+                        <td>
+                          <button
+                            className="btn btn-sm btn-outline-info"
+                            onClick={() => setReviseTarget(r)}
+                            title="Revise discount or admission fee on this bill"
+                          >
+                            ✏️ Revise
+                          </button>
                         </td>
 
                         {/* Reprint ← E7 */}
@@ -645,13 +682,28 @@ function FeePayment() {
                 onChange={(e) => setForm({ ...form, remarks: e.target.value })}
               />
             </div>
-            <div className="col-12">
+            <div className="col-12 d-flex flex-wrap gap-2">
               <button
                 type="submit"
                 className="btn btn-success px-4"
                 disabled={payLoading}
               >
                 {payLoading ? "Processing..." : "💰 Record Payment"}
+              </button>
+
+              {/* ── Pay Advance (Multi-Month) ── */}
+              <button
+                type="button"
+                className="btn btn-outline-success px-4"
+                disabled={!isStudentSelected}
+                onClick={() => setShowAdvance(true)}
+                title={
+                  !isStudentSelected
+                    ? "Select a student first"
+                    : "Pay for multiple months in one go"
+                }
+              >
+                💰 Pay Advance (Multi-Month)
               </button>
             </div>
           </div>
@@ -744,6 +796,30 @@ function FeePayment() {
             </button>
           </div>
         </div>
+      )}
+
+      {/* ─── ADVANCE PAYMENT MODAL (Phase 4) ─── */}
+      {showAdvance && selectedStudentInfo && (
+        <AdvancePaymentModal
+          student={selectedStudentInfo}
+          onClose={() => setShowAdvance(false)}
+          onSaved={async () => {
+            setShowAdvance(false);
+            await refreshFeeData();
+          }}
+        />
+      )}
+
+      {/* ─── REVISE FEE MODAL (Phase 2 — Case 1) ─── */}
+      {reviseTarget && (
+        <ReviseFeeModal
+          feeRecord={reviseTarget}
+          onClose={() => setReviseTarget(null)}
+          onSaved={async () => {
+            setReviseTarget(null);
+            await refreshFeeData();
+          }}
+        />
       )}
     </div>
   );
