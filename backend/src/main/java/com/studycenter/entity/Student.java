@@ -8,7 +8,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalTime;
 
@@ -58,4 +58,8 @@ public class Student {
     private LocalDate deactivationDate;
 
     private String remarks;
+
+    @Column(name = "wallet_balance", nullable = false, precision = 10, scale = 2)
+    @Builder.Default
+    private BigDecimal walletBalance = BigDecimal.ZERO;
 }

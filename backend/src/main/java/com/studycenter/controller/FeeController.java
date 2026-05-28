@@ -23,9 +23,20 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
+import com.studycenter.dto.ReviseFeeRequest;
+import com.studycenter.dto.ReviseFeeResponse;
+import com.studycenter.entity.FeeAdjustment;
+import com.studycenter.service.AdjustmentService;
+import com.studycenter.dto.SlotChangeRequest;
+import com.studycenter.dto.SlotChangeResponse;
+import jakarta.validation.Valid;
 import java.time.LocalDate;
 import java.util.Map;
+import com.studycenter.dto.AdvancePaymentRequest;
+import com.studycenter.dto.AdvancePaymentResponse;
+import com.studycenter.entity.StudentFeeConfig;
+import java.util.List;
+import com.studycenter.entity.StudentFeeConfig;
 
 @RestController
 @RequestMapping("/api/fees")
@@ -34,6 +45,7 @@ import java.util.Map;
 public class FeeController {
 
     private final FeeService feeService;
+    private final AdjustmentService adjustmentService;
 
     @PostMapping("/preview")
     public ResponseEntity<FeeCalculateResponse> preview(@Valid @RequestBody FeePreviewRequest req) {
@@ -118,4 +130,36 @@ public class FeeController {
             @PathVariable String receiptNumber) {
         return ResponseEntity.ok(feeService.getReceipt(receiptNumber));
     }
+
+   
+// ─── Case 1: Revise fee ───
+@PutMapping("/{feeId}/revise")
+public ResponseEntity<ReviseFeeResponse> reviseFee(
+        @PathVariable Long feeId,
+        @RequestBody ReviseFeeRequest request) {
+    return ResponseEntity.ok(feeService.reviseFee(feeId, request));
+}
+
+// ─── Adjustment history ───
+@GetMapping("/{feeId}/adjustments")
+public ResponseEntity<List<FeeAdjustment>> getAdjustments(@PathVariable Long feeId) {
+    return ResponseEntity.ok(adjustmentService.getForFee(feeId));
+}
+
+@PostMapping("/slot-change")
+public ResponseEntity<SlotChangeResponse> slotChange(@Valid @RequestBody SlotChangeRequest request) {
+    return ResponseEntity.ok(feeService.changeSlotForMonth(request));
+}
+    
+@PostMapping("/advance-payment")
+public ResponseEntity<AdvancePaymentResponse> advancePayment(
+        @Valid @RequestBody AdvancePaymentRequest request) {
+    return ResponseEntity.ok(feeService.recordAdvancePayment(request));
+}
+
+@GetMapping("/active-config/{regNo}")
+public ResponseEntity<StudentFeeConfig> getActiveConfig(@PathVariable Long regNo) {
+    return ResponseEntity.ok(feeService.getActiveConfig(regNo));
+}   
+    
 }

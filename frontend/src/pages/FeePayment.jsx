@@ -5,15 +5,17 @@ import {
   searchStudents,
   autoGenerateFee,
   reversePayment,
+  getWallet,
 } from "../services/api";
 import { toast } from "react-toastify";
+import AdvancePaymentModal from "../components/AdvancePaymentModal";
+import ReviseFeeModal from "../components/ReviseFeeModal";
+import WalletModal from "../components/WalletModal";
 
 function FeePayment() {
   const now = new Date();
 
-  // ═══════════════════════════════════════
   // STUDENT SEARCH
-  // ═══════════════════════════════════════
   const [studentSearchType, setStudentSearchType] = useState("name");
   const [studentSearchValue, setStudentSearchValue] = useState("");
   const [searchResults, setSearchResults] = useState(null);
@@ -22,15 +24,11 @@ function FeePayment() {
   const [isStudentSelected, setIsStudentSelected] = useState(false);
   const [selectedStudentInfo, setSelectedStudentInfo] = useState(null);
 
-  // ═══════════════════════════════════════
-  // FEE RECORDS for selected student
-  // ═══════════════════════════════════════
+  // FEE RECORDS
   const [feeData, setFeeData] = useState(null);
   const [feeLoading, setFeeLoading] = useState(false);
 
-  // ═══════════════════════════════════════
   // PAYMENT FORM
-  // ═══════════════════════════════════════
   const [form, setForm] = useState({
     regNo: "",
     feeMonth: now.getMonth() + 1,
@@ -41,6 +39,17 @@ function FeePayment() {
   });
   const [payLoading, setPayLoading] = useState(false);
   const [result, setResult] = useState(null);
+
+  // MODALS
+  const [showAdvance, setShowAdvance] = useState(false);
+  const [reviseTarget, setReviseTarget] = useState(null);
+
+  // WALLET
+  const [walletBalance, setWalletBalance] = useState(null);
+  const [showWallet, setShowWallet] = useState(false);
+
+  // REVERSE
+  const [reverseLoading, setReverseLoading] = useState(null);
 
   // ═══════════════════════════════════════
   // SEARCH STUDENTS
@@ -54,10 +63,7 @@ function FeePayment() {
     setStudentSearchLoading(true);
     setSearchResults(null);
     try {
-      const res = await searchStudents(
-        studentSearchType,
-        studentSearchValue.trim(),
-      );
+      const res = await searchStudents(studentSearchType, studentSearchValue.trim());
       setSearchResults(res.data);
       if (res.data.length === 0) toast.info("No active students found");
     } catch (err) {
@@ -68,7 +74,7 @@ function FeePayment() {
   };
 
   // ═══════════════════════════════════════
-  // SELECT STUDENT — auto-generate + fetch records
+  // SELECT STUDENT
   // ═══════════════════════════════════════
   const handleSelectStudent = async (student) => {
     setIsStudentSelected(true);
@@ -84,20 +90,16 @@ function FeePayment() {
 
     toast.success(`Selected: ${student.name}`);
 
-    // Step 1: Auto-generate current month fee if not already created
     setFeeLoading(true);
     try {
       await autoGenerateFee(student.regNo);
     } catch (err) {
       const msg = err.response?.data?.message || "";
       if (msg.includes("No fee config")) {
-        toast.warn(
-          "Fee not locked yet for this student. Go to Fee Calculate page first.",
-        );
+        toast.warn("Fee not locked yet for this student. Go to Fee Calculate page first.");
       }
     }
 
-    // Step 2: Fetch full fee history
     try {
       const res = await getStudentFeeStatus(student.regNo);
       setFeeData(res.data);
@@ -105,6 +107,14 @@ function FeePayment() {
       toast.error("Could not load fee records");
     } finally {
       setFeeLoading(false);
+    }
+
+    // Wallet balance
+    try {
+      const w = await getWallet(student.regNo);
+      setWalletBalance(w.data.balance);
+    } catch {
+      // silently ignore
     }
   };
 
@@ -119,11 +129,10 @@ function FeePayment() {
     setStudentSearchValue("");
     setResult(null);
     setForm((prev) => ({ ...prev, regNo: "", payAmount: "" }));
+    setWalletBalance(null);
+    setShowWallet(false);
   };
 
-  // ═══════════════════════════════════════
-  // QUICK FILL from pending record row
-  // ═══════════════════════════════════════
   const handleQuickFill = (record) => {
     setForm((prev) => ({
       ...prev,
@@ -154,7 +163,6 @@ function FeePayment() {
       setResult(res.data);
       toast.success(res.data.message);
 
-      // Refresh fee records after payment
       const updated = await getStudentFeeStatus(Number(form.regNo));
       setFeeData(updated.data);
 
@@ -167,7 +175,22 @@ function FeePayment() {
   };
 
   // ═══════════════════════════════════════
-  // PRINT RECEIPT (after fresh payment)
+  // REFRESH (fee + wallet) — used by modals
+  // ═══════════════════════════════════════
+  const refreshFeeData = async () => {
+    if (!selectedStudentInfo) return;
+    try {
+      const updated = await getStudentFeeStatus(selectedStudentInfo.regNo);
+      setFeeData(updated.data);
+      const w = await getWallet(selectedStudentInfo.regNo);
+      setWalletBalance(w.data.balance);
+    } catch {
+      toast.error("Could not refresh fee records");
+    }
+  };
+
+  // ═══════════════════════════════════════
+  // PRINT RECEIPT
   // ═══════════════════════════════════════
   const handlePrintReceipt = () => {
     const win = window.open("", "_blank", "width=440,height=640");
@@ -221,9 +244,7 @@ function FeePayment() {
           <tr><td>Status</td><td><span class="pill">${result.paymentStatus}</span></td></tr>
         </table>
         <div class="dash"></div>
-        <div class="foot">
-          Thank you for your payment!<br>Please keep this receipt for your records.
-        </div>
+        <div class="foot">Thank you for your payment!<br>Please keep this receipt for your records.</div>
       </body>
       </html>
     `);
@@ -233,7 +254,7 @@ function FeePayment() {
   };
 
   // ═══════════════════════════════════════
-  // REPRINT from monthly records table ← E7
+  // REPRINT
   // ═══════════════════════════════════════
   const handleReprintReceipt = (r) => {
     const win = window.open("", "_blank", "width=440,height=660");
@@ -298,10 +319,8 @@ function FeePayment() {
   };
 
   // ═══════════════════════════════════════
-  // REVERSE PAYMENT ← E6
+  // REVERSE
   // ═══════════════════════════════════════
-  const [reverseLoading, setReverseLoading] = useState(null);
-
   const handleReverse = async (r) => {
     const confirmed = window.confirm(
       `⚠️ Reverse payment for ${r.feeMonth}/${r.feeYear}?\n\n` +
@@ -312,12 +331,8 @@ function FeePayment() {
 
     setReverseLoading(r.feeId);
     try {
-      const res = await reversePayment(r.feeId, {
-        remarks: "Reversed via admin panel",
-      });
+      const res = await reversePayment(r.feeId, { remarks: "Reversed via admin panel" });
       toast.success(res.data.message);
-
-      // Refresh fee records
       const updated = await getStudentFeeStatus(Number(form.regNo));
       setFeeData(updated.data);
       setResult(null);
@@ -328,13 +343,9 @@ function FeePayment() {
     }
   };
 
-  // ═══════════════════════════════════════
-  // STATUS BADGE
-  // ═══════════════════════════════════════
   const statusBadge = (s) => {
     if (s === "PAID") return <span className="badge bg-success">✅ PAID</span>;
-    if (s === "PARTIAL")
-      return <span className="badge bg-warning text-dark">🔶 PARTIAL</span>;
+    if (s === "PARTIAL") return <span className="badge bg-warning text-dark">🔶 PARTIAL</span>;
     return <span className="badge bg-secondary">⏳ PENDING</span>;
   };
 
@@ -346,8 +357,7 @@ function FeePayment() {
       <div className="form-section col-lg-9 mb-4">
         <h5 className="fw-bold mb-2">Step 1: Find Student</h5>
         <p className="text-muted small mb-3">
-          Search by Name, Reg No, or Mobile. Current month fee will be
-          auto-generated on selection.
+          Search by Name, Reg No, or Mobile. Current month fee will be auto-generated on selection.
         </p>
 
         {!isStudentSelected ? (
@@ -384,11 +394,7 @@ function FeePayment() {
                 />
               </div>
               <div className="col-md-3">
-                <button
-                  type="submit"
-                  className="btn btn-outline-primary w-100"
-                  disabled={studentSearchLoading}
-                >
+                <button type="submit" className="btn btn-outline-primary w-100" disabled={studentSearchLoading}>
                   {studentSearchLoading ? "..." : "🔍 Search"}
                 </button>
               </div>
@@ -415,17 +421,10 @@ function FeePayment() {
                         <td>{s.fatherName || "-"}</td>
                         <td>{s.mobile}</td>
                         <td>
-                          {s.inTime && s.outTime ? (
-                            `${s.inTime} - ${s.outTime}`
-                          ) : (
-                            <span className="text-muted">—</span>
-                          )}
+                          {s.inTime && s.outTime ? `${s.inTime} - ${s.outTime}` : <span className="text-muted">—</span>}
                         </td>
                         <td>
-                          <button
-                            className="btn btn-sm btn-success"
-                            onClick={() => handleSelectStudent(s)}
-                          >
+                          <button className="btn btn-sm btn-success" onClick={() => handleSelectStudent(s)}>
                             ✅ Select
                           </button>
                         </td>
@@ -440,22 +439,16 @@ function FeePayment() {
           <div className="alert alert-info py-2 d-flex justify-content-between align-items-center">
             <span>
               👤 <strong>{selectedStudentInfo?.name}</strong>
-              {selectedStudentInfo?.gender &&
-                ` | ${selectedStudentInfo.gender}`}
+              {selectedStudentInfo?.gender && ` | ${selectedStudentInfo.gender}`}
               {` | Reg No: ${selectedStudentInfo?.regNo}`}
-              {selectedStudentInfo?.mobile &&
-                ` | 📱 ${selectedStudentInfo.mobile}`}
+              {selectedStudentInfo?.mobile && ` | 📱 ${selectedStudentInfo.mobile}`}
             </span>
-            <button
-              className="btn btn-sm btn-outline-warning"
-              onClick={handleChangeStudent}
-            >
+            <button className="btn btn-sm btn-outline-warning" onClick={handleChangeStudent}>
               Change Student
             </button>
           </div>
         )}
 
-        {/* Fee records table */}
         {feeLoading && (
           <div className="text-muted small mt-2">⏳ Loading fee records...</div>
         )}
@@ -467,10 +460,26 @@ function FeePayment() {
               &nbsp;|&nbsp; Total: ₹{feeData.totalFee} &nbsp;|&nbsp; Paid:{" "}
               <span className="text-success fw-bold">₹{feeData.totalPaid}</span>
               &nbsp;|&nbsp; Balance:{" "}
-              <span className="text-danger fw-bold">
-                ₹{feeData.totalBalance}
-              </span>
+              <span className="text-danger fw-bold">₹{feeData.totalBalance}</span>
             </div>
+
+            {/* ── Wallet card ────────────────────────────── */}
+            {walletBalance !== null && (
+              <div className={`alert ${Number(walletBalance) > 0 ? "alert-warning" : "alert-light"} py-2 d-flex justify-content-between align-items-center`}>
+                <span>
+                  💰 <strong>Wallet Balance:</strong>{" "}
+                  <span className={Number(walletBalance) > 0 ? "fw-bold text-success" : "text-muted"}>
+                    Rs.{Number(walletBalance).toFixed(2)}
+                  </span>
+                  {Number(walletBalance) > 0 && (
+                    <span className="text-muted small ms-2">— credit available</span>
+                  )}
+                </span>
+                <button className="btn btn-sm btn-outline-primary" onClick={() => setShowWallet(true)}>
+                  📜 View / Refund
+                </button>
+              </div>
+            )}
 
             {feeData.monthlyRecords && feeData.monthlyRecords.length > 0 ? (
               <div className="table-responsive">
@@ -486,6 +495,7 @@ function FeePayment() {
                       <th>Status</th>
                       <th>Quick Pay</th>
                       <th>Reverse</th>
+                      <th>Revise</th>
                       <th>Reprint</th>
                     </tr>
                   </thead>
@@ -501,36 +511,24 @@ function FeePayment() {
                               : ""
                         }
                       >
-                        <td className="fw-bold">
-                          {r.feeMonth}/{r.feeYear}
-                        </td>
-                        <td>
-                          {r.inTime} - {r.outTime}
-                        </td>
+                        <td className="fw-bold">{r.feeMonth}/{r.feeYear}</td>
+                        <td>{r.inTime} - {r.outTime}</td>
                         <td>₹{r.finalFee}</td>
-                        <td>
-                          {r.admissionFee > 0 ? `₹${r.admissionFee}` : "—"}
-                        </td>
+                        <td>{r.admissionFee > 0 ? `₹${r.admissionFee}` : "—"}</td>
                         <td>₹{r.paidAmount}</td>
                         <td className="fw-bold">₹{r.balanceAmount}</td>
                         <td>{statusBadge(r.paymentStatus)}</td>
 
-                        {/* Quick Pay */}
                         <td>
                           {r.paymentStatus !== "PAID" && (
-                            <button
-                              className="btn btn-sm btn-outline-success"
-                              onClick={() => handleQuickFill(r)}
-                            >
+                            <button className="btn btn-sm btn-outline-success" onClick={() => handleQuickFill(r)}>
                               💰 Fill
                             </button>
                           )}
                         </td>
 
-                        {/* Reverse ← E6 */}
                         <td>
-                          {(r.paymentStatus === "PAID" ||
-                            r.paymentStatus === "PARTIAL") && (
+                          {(r.paymentStatus === "PAID" || r.paymentStatus === "PARTIAL") && (
                             <button
                               className="btn btn-sm btn-outline-danger"
                               disabled={reverseLoading === r.feeId}
@@ -538,14 +536,21 @@ function FeePayment() {
                             >
                               {reverseLoading === r.feeId ? (
                                 <span className="spinner-border spinner-border-sm" />
-                              ) : (
-                                "↩️ Reverse"
-                              )}
+                              ) : "↩️ Reverse"}
                             </button>
                           )}
                         </td>
 
-                        {/* Reprint ← E7 */}
+                        <td>
+                          <button
+                            className="btn btn-sm btn-outline-info"
+                            onClick={() => setReviseTarget(r)}
+                            title="Revise discount or admission fee on this bill"
+                          >
+                            ✏️ Revise
+                          </button>
+                        </td>
+
                         <td>
                           {r.receiptNumber && (
                             <button
@@ -564,8 +569,7 @@ function FeePayment() {
               </div>
             ) : (
               <div className="alert alert-warning">
-                No fee records found. Please lock fee first on the{" "}
-                <strong>Fee Calculate</strong> page.
+                No fee records found. Please lock fee first on the <strong>Fee Calculate</strong> page.
               </div>
             )}
           </div>
@@ -580,21 +584,16 @@ function FeePayment() {
             <div className="col-md-4">
               <label className="form-label fw-bold">Reg No *</label>
               <input
-                type="number"
-                className="form-control"
+                type="number" className="form-control"
                 value={form.regNo}
                 onChange={(e) => setForm({ ...form, regNo: e.target.value })}
-                disabled={isStudentSelected}
-                required
+                disabled={isStudentSelected} required
               />
             </div>
             <div className="col-md-4">
               <label className="form-label fw-bold">Month *</label>
               <input
-                type="number"
-                className="form-control"
-                min="1"
-                max="12"
+                type="number" className="form-control" min="1" max="12"
                 value={form.feeMonth}
                 onChange={(e) => setForm({ ...form, feeMonth: e.target.value })}
                 required
@@ -603,8 +602,7 @@ function FeePayment() {
             <div className="col-md-4">
               <label className="form-label fw-bold">Year *</label>
               <input
-                type="number"
-                className="form-control"
+                type="number" className="form-control"
                 value={form.feeYear}
                 onChange={(e) => setForm({ ...form, feeYear: e.target.value })}
                 required
@@ -613,13 +611,9 @@ function FeePayment() {
             <div className="col-md-4">
               <label className="form-label fw-bold">Pay Amount (₹) *</label>
               <input
-                type="number"
-                step="0.01"
-                className="form-control"
+                type="number" step="0.01" className="form-control"
                 value={form.payAmount}
-                onChange={(e) =>
-                  setForm({ ...form, payAmount: e.target.value })
-                }
+                onChange={(e) => setForm({ ...form, payAmount: e.target.value })}
                 required
               />
             </div>
@@ -628,9 +622,7 @@ function FeePayment() {
               <select
                 className="form-select"
                 value={form.paymentMode}
-                onChange={(e) =>
-                  setForm({ ...form, paymentMode: e.target.value })
-                }
+                onChange={(e) => setForm({ ...form, paymentMode: e.target.value })}
               >
                 <option value="CASH">💵 Cash</option>
                 <option value="ONLINE">💳 Online</option>
@@ -639,19 +631,24 @@ function FeePayment() {
             <div className="col-md-4">
               <label className="form-label fw-bold">Remarks</label>
               <input
-                type="text"
-                className="form-control"
+                type="text" className="form-control"
                 value={form.remarks}
                 onChange={(e) => setForm({ ...form, remarks: e.target.value })}
               />
             </div>
-            <div className="col-12">
-              <button
-                type="submit"
-                className="btn btn-success px-4"
-                disabled={payLoading}
-              >
+            <div className="col-12 d-flex flex-wrap gap-2">
+              <button type="submit" className="btn btn-success px-4" disabled={payLoading}>
                 {payLoading ? "Processing..." : "💰 Record Payment"}
+              </button>
+
+              <button
+                type="button"
+                className="btn btn-outline-success px-4"
+                disabled={!isStudentSelected}
+                onClick={() => setShowAdvance(true)}
+                title={!isStudentSelected ? "Select a student first" : "Pay for multiple months in one go"}
+              >
+                💰 Pay Advance (Multi-Month)
               </button>
             </div>
           </div>
@@ -664,86 +661,76 @@ function FeePayment() {
           <h5 className="fw-bold">✅ {result.message}</h5>
           <table className="table table-sm mt-3">
             <tbody>
-              <tr>
-                <td>Receipt No</td>
-                <td className="fw-bold text-primary fs-5">
-                  {result.receiptNumber}
-                </td>
-              </tr>
-              <tr>
-                <td>Student</td>
-                <td>
-                  {result.studentName} (Reg: {result.regNo})
-                </td>
-              </tr>
-              <tr>
-                <td>Month</td>
-                <td>
-                  {result.feeMonth}/{result.feeYear}
-                </td>
-              </tr>
-              <tr>
-                <td>Final Fee</td>
-                <td>₹{result.finalFee}</td>
-              </tr>
-              <tr>
-                <td>Paid Now</td>
-                <td className="text-success fw-bold fs-5">
-                  ₹{result.amountPaidNow}
-                </td>
-              </tr>
-              <tr>
-                <td>Total Paid So Far</td>
-                <td>₹{result.totalPaidSoFar}</td>
-              </tr>
+              <tr><td>Receipt No</td><td className="fw-bold text-primary fs-5">{result.receiptNumber}</td></tr>
+              <tr><td>Student</td><td>{result.studentName} (Reg: {result.regNo})</td></tr>
+              <tr><td>Month</td><td>{result.feeMonth}/{result.feeYear}</td></tr>
+              <tr><td>Final Fee</td><td>₹{result.finalFee}</td></tr>
+              <tr><td>Paid Now</td><td className="text-success fw-bold fs-5">₹{result.amountPaidNow}</td></tr>
+              <tr><td>Total Paid So Far</td><td>₹{result.totalPaidSoFar}</td></tr>
               <tr>
                 <td>Balance</td>
-                <td
-                  className={
-                    result.balanceRemaining > 0
-                      ? "text-danger fw-bold"
-                      : "text-success fw-bold"
-                  }
-                >
+                <td className={result.balanceRemaining > 0 ? "text-danger fw-bold" : "text-success fw-bold"}>
                   ₹{result.balanceRemaining}
                 </td>
               </tr>
               <tr>
                 <td>Status</td>
                 <td>
-                  <span
-                    className={`badge fs-6 ${
-                      result.paymentStatus === "PAID"
-                        ? "bg-success"
-                        : "bg-warning text-dark"
-                    }`}
-                  >
-                    {result.paymentStatus === "PAID"
-                      ? "✅ FULLY PAID"
-                      : "🔶 PARTIAL"}
+                  <span className={`badge fs-6 ${result.paymentStatus === "PAID" ? "bg-success" : "bg-warning text-dark"}`}>
+                    {result.paymentStatus === "PAID" ? "✅ FULLY PAID" : "🔶 PARTIAL"}
                   </span>
                 </td>
               </tr>
-              <tr>
-                <td>Mode</td>
-                <td>{result.paymentMode}</td>
-              </tr>
-              <tr>
-                <td>Date</td>
-                <td>{result.paymentDate}</td>
-              </tr>
+              <tr><td>Mode</td><td>{result.paymentMode}</td></tr>
+              <tr><td>Date</td><td>{result.paymentDate}</td></tr>
             </tbody>
           </table>
 
           <div className="mt-3">
-            <button
-              className="btn btn-outline-primary"
-              onClick={handlePrintReceipt}
-            >
+            <button className="btn btn-outline-primary" onClick={handlePrintReceipt}>
               🖨️ Print / Save Receipt
             </button>
           </div>
         </div>
+      )}
+
+      {/* ─── ADVANCE PAYMENT MODAL — keep open after save ─── */}
+      {showAdvance && selectedStudentInfo && (
+        <AdvancePaymentModal
+          student={selectedStudentInfo}
+          onClose={() => setShowAdvance(false)}
+          onSaved={async () => {
+            // 🔧 FIX: do NOT close modal — let admin see result panel
+            await refreshFeeData();
+          }}
+        />
+      )}
+
+      {/* ─── REVISE FEE MODAL — keep open after save ─── */}
+      {reviseTarget && (
+        <ReviseFeeModal
+          feeRecord={reviseTarget}
+          onClose={() => setReviseTarget(null)}
+          onSaved={async () => {
+            // 🔧 FIX: do NOT close modal — let admin see result panel
+            await refreshFeeData();
+          }}
+        />
+      )}
+
+      {/* ─── WALLET MODAL ───────────────────── */}
+      {showWallet && selectedStudentInfo && (
+        <WalletModal
+          regNo={selectedStudentInfo.regNo}
+          studentName={selectedStudentInfo.name}
+          onClose={() => setShowWallet(false)}
+          onChanged={async () => {
+            try {
+              const w = await getWallet(selectedStudentInfo.regNo);
+              setWalletBalance(w.data.balance);
+            } catch {}
+          }}
+        />
       )}
     </div>
   );

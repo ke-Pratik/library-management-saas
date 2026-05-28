@@ -83,4 +83,14 @@ export const reversePayment = (feeId, data) =>
 export const getReceipt = (receiptNumber) =>
   API.get(`/fees/receipt/${receiptNumber}`);
 
+//Enhancement 28 MAY 
+export const reviseFee           = (feeId, data) => API.put(`/fees/${feeId}/revise`, data);
+export const getFeeAdjustments   = (feeId)       => API.get(`/fees/${feeId}/adjustments`);
+export const slotChange          = (data)        => API.post(`/fees/slot-change`, data);
+export const advancePayment      = (data)        => API.post(`/fees/advance-payment`, data);
+export const getWallet           = (regNo)       => API.get(`/students/${regNo}/wallet`);
+export const getWalletTx         = (regNo)       => API.get(`/students/${regNo}/wallet/transactions`);
+export const refundWalletCash    = (regNo, data) => API.post(`/students/${regNo}/wallet/refund-cash`, data);
+export const getActiveConfig = (regNo) => API.get(`/fees/active-config/${regNo}`);
+
 export default API;
