@@ -34,6 +34,7 @@ import java.time.LocalDate;
 import java.util.Map;
 import com.studycenter.dto.AdvancePaymentRequest;
 import com.studycenter.dto.AdvancePaymentResponse;
+import com.studycenter.entity.StudentFeeConfig;
 
 @RestController
 @RequestMapping("/api/fees")
@@ -153,5 +154,10 @@ public ResponseEntity<AdvancePaymentResponse> advancePayment(
         @Valid @RequestBody AdvancePaymentRequest request) {
     return ResponseEntity.ok(feeService.recordAdvancePayment(request));
 }
+
+@GetMapping("/active-config/{regNo}")
+public ResponseEntity<StudentFeeConfig> getActiveConfig(@PathVariable Long regNo) {
+    return ResponseEntity.ok(feeService.getActiveConfig(regNo));
+}   
     
 }
