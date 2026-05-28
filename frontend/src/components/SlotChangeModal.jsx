@@ -21,12 +21,13 @@ export default function SlotChangeModal({ student, onClose, onSaved }) {
         const res = await getActiveConfig(student.regNo);
         if (cancelled) return;
         setCurrentConfig(res.data);
-        // Pre-fill discount with the student's current monthly discount
-        if (res.data.discountAmount != null) {
-          setDiscount(res.data.discountAmount.toString());
-        }
+        // Always pre-fill discount — default to "0" if null
+        const cfgDisc = res.data.discountAmount != null
+          ? Number(res.data.discountAmount).toFixed(2)
+          : "0";
+        setDiscount(cfgDisc);
       } catch (err) {
-        // No config found — keep defaults (discount = "0")
+        // No config — keep default "0"
         if (!cancelled) {
           toast.info("No existing fee config found. Discount defaulted to 0.");
         }
@@ -93,10 +94,7 @@ export default function SlotChangeModal({ student, onClose, onSaved }) {
                         <td>New days × new rate</td>
                         <td>{result.newDays} days → Rs.{result.newRemainingFee}</td>
                       </tr>
-                      <tr>
-                        <td>Admission fee</td>
-                        <td>Rs.{result.admissionFee}</td>
-                      </tr>
+                      <tr><td>Admission fee</td><td>Rs.{result.admissionFee}</td></tr>
                       <tr className="table-info">
                         <td>Revised final fee</td>
                         <td><strong>Rs.{result.revisedFinalFee}</strong></td>
@@ -134,13 +132,20 @@ export default function SlotChangeModal({ student, onClose, onSaved }) {
                 </div>
               ) : (
                 <form onSubmit={submit}>
+                  {/* ── Prominent info banner ── */}
+                  <div className="alert alert-primary py-2 small mb-3">
+                    💡 <strong>Existing discount is pre-filled below.</strong>{" "}
+                    Edit only if you want to change it.
+                  </div>
+
                   {currentConfig && (
                     <div className="alert alert-info py-2 small mb-3">
                       <strong>Current plan:</strong>{" "}
                       {currentConfig.inTime} – {currentConfig.outTime} | Monthly fee Rs.
-                      {currentConfig.monthlyFee} | Discount Rs.{currentConfig.discountAmount}
+                      {currentConfig.monthlyFee} | Discount Rs.{Number(currentConfig.discountAmount || 0).toFixed(2)}
                     </div>
                   )}
+
                   <div className="row g-3">
                     <div className="col-md-6">
                       <label className="form-label fw-semibold">
@@ -182,12 +187,10 @@ export default function SlotChangeModal({ student, onClose, onSaved }) {
                         onChange={(e) => setDiscount(e.target.value)}
                         disabled={saving}
                       />
-                      {currentConfig?.discountAmount != null && (
-                        <small className="text-muted">
-                          Pre-filled from current plan: Rs.{currentConfig.discountAmount}/month.
-                          Edit if changing.
-                        </small>
-                      )}
+                      <small className="text-muted">
+                        Pre-filled from current plan: Rs.
+                        {Number(currentConfig?.discountAmount || 0).toFixed(2)}/month
+                      </small>
                     </div>
                     <div className="col-12">
                       <label className="form-label fw-semibold">
@@ -203,6 +206,7 @@ export default function SlotChangeModal({ student, onClose, onSaved }) {
                       />
                     </div>
                   </div>
+
                   <button type="submit" className="btn btn-primary mt-3" disabled={saving}>
                     {saving
                       ? <><span className="spinner-border spinner-border-sm me-2" />Saving...</>
