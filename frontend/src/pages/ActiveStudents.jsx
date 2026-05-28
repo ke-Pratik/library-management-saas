@@ -7,7 +7,6 @@ import {
 } from "../services/api";
 import { toast } from "react-toastify";
 import SlotChangeModal from "../components/SlotChangeModal";
-import AdvancePaymentModal from "../components/AdvancePaymentModal";
 
 const PAGE_SIZE = 10;
 
@@ -40,9 +39,6 @@ function ActiveStudents() {
 
   // ── Slot change modal target ──────────────────────────────────
   const [slotTarget, setSlotTarget] = useState(null);
-
-  // ── Advance payment modal target ──────────────────────────────
-  const [advanceTarget, setAdvanceTarget] = useState(null);
 
   // ── Fetch active students ─────────────────────────────────────
   const fetchStudents = useCallback(async (pageNum) => {
@@ -165,12 +161,6 @@ function ActiveStudents() {
     setSlotTarget(s);
   };
 
-  // ── Advance payment handler ───────────────────────────────────
-  const openAdvance = (s) => {
-    setOpenMenuRegNo(null);
-    setAdvanceTarget(s);
-  };
-
   // ── Toggle row dropdown ───────────────────────────────────────
   const toggleMenu = (e, regNo) => {
     e.stopPropagation();    // prevent outside-click handler from firing
@@ -213,97 +203,96 @@ function ActiveStudents() {
                 {students.length === 0 ? (
                   <tr><td colSpan="10" className="text-center py-5 text-muted"><div className="fs-5">📭</div>No active students found</td></tr>
                 ) : (
-                  students.map((s, idx) => (
-                    <tr key={s.regNo}>
-                      <td className="text-muted">{page * PAGE_SIZE + idx + 1}</td>
-                      <td className="fw-bold">{s.regNo}</td>
-                      <td>{s.name}</td>
-                      <td>
-                        <span className={`badge ${s.gender === "Male" ? "bg-primary" : "bg-danger"}`}>
-                          {s.gender}
-                        </span>
-                      </td>
-                      <td>{s.mobile}</td>
-                      <td>
-                        {s.seatNo > 0
-                          ? <span className="badge bg-info text-dark fw-bold">{s.seatNo}</span>
-                          : <span className="text-muted">—</span>}
-                      </td>
-                      <td>
-                        {s.timeSlot
-                          ? <span className="badge bg-success">{s.timeSlot}</span>
-                          : <span className="text-muted">Not set</span>}
-                      </td>
-                      <td>{feeStatusBadge(s.feeStatus)}</td>
-                      <td>{s.dateOfAdmission}</td>
+                  students.map((s, idx) => {
+                    // ── Flip dropdown UPWARD for last 2 rows ──
+                    const isNearBottom = idx >= students.length - 2;
 
-                      {/* ── HYBRID ACTION COLUMN ── */}
-                      <td>
-                        <div className="d-flex gap-2 align-items-center">
-                          {/* Primary action: Edit */}
-                          <button
-                            className="btn btn-sm btn-outline-primary"
-                            onClick={() => openEdit(s)}
-                          >
-                            ✏️ Edit
-                          </button>
+                    return (
+                      <tr key={s.regNo}>
+                        <td className="text-muted">{page * PAGE_SIZE + idx + 1}</td>
+                        <td className="fw-bold">{s.regNo}</td>
+                        <td>{s.name}</td>
+                        <td>
+                          <span className={`badge ${s.gender === "Male" ? "bg-primary" : "bg-danger"}`}>
+                            {s.gender}
+                          </span>
+                        </td>
+                        <td>{s.mobile}</td>
+                        <td>
+                          {s.seatNo > 0
+                            ? <span className="badge bg-info text-dark fw-bold">{s.seatNo}</span>
+                            : <span className="text-muted">—</span>}
+                        </td>
+                        <td>
+                          {s.timeSlot
+                            ? <span className="badge bg-success">{s.timeSlot}</span>
+                            : <span className="text-muted">Not set</span>}
+                        </td>
+                        <td>{feeStatusBadge(s.feeStatus)}</td>
+                        <td>{s.dateOfAdmission}</td>
 
-                          {/* More actions: ⋮ dropdown */}
-                          <div style={{ position: "relative" }}>
+                        {/* ── HYBRID ACTION COLUMN ── */}
+                        <td>
+                          <div className="d-flex gap-2 align-items-center">
+                            {/* Primary action: Edit */}
                             <button
-                              className="btn btn-sm btn-outline-secondary"
-                              onClick={(e) => toggleMenu(e, s.regNo)}
-                              title="More actions"
-                              style={{ minWidth: "32px" }}
+                              className="btn btn-sm btn-outline-primary"
+                              onClick={() => openEdit(s)}
                             >
-                              ⋮
+                              ✏️ Edit
                             </button>
 
-                            {openMenuRegNo === s.regNo && (
-                              <ul
-                                className="dropdown-menu show shadow"
-                                style={{
-                                  position: "absolute",
-                                  right: 0,
-                                  top: "100%",
-                                  marginTop: "4px",
-                                  minWidth: "200px",
-                                  zIndex: 1050,
-                                }}
-                                onClick={(e) => e.stopPropagation()}
+                            {/* More actions: ⋮ dropdown */}
+                            <div style={{ position: "relative" }}>
+                              <button
+                                className="btn btn-sm btn-outline-secondary"
+                                onClick={(e) => toggleMenu(e, s.regNo)}
+                                title="More actions"
+                                style={{ minWidth: "32px" }}
                               >
-                                <li>
-                                  <button
-                                    className="dropdown-item"
-                                    onClick={() => openSlotChange(s)}
-                                  >
-                                    🕐 Change Slot
-                                  </button>
-                                </li>
-                                <li>
-                                  <button
-                                    className="dropdown-item"
-                                    onClick={() => openAdvance(s)}
-                                  >
-                                    💰 Pay Advance
-                                  </button>
-                                </li>
-                                <li><hr className="dropdown-divider" /></li>
-                                <li>
-                                  <button
-                                    className="dropdown-item text-danger"
-                                    onClick={() => openDeactivate(s)}
-                                  >
-                                    🔴 Deactivate
-                                  </button>
-                                </li>
-                              </ul>
-                            )}
+                                ⋮
+                              </button>
+
+                              {openMenuRegNo === s.regNo && (
+                                <ul
+                                  className="dropdown-menu show shadow"
+                                  style={{
+                                    position: "absolute",
+                                    right: 0,
+                                    // ── Flip upward for last 2 rows ──
+                                    ...(isNearBottom
+                                      ? { bottom: "100%", marginBottom: "4px" }
+                                      : { top: "100%", marginTop: "4px" }),
+                                    minWidth: "200px",
+                                    zIndex: 1050,
+                                  }}
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <li>
+                                    <button
+                                      className="dropdown-item"
+                                      onClick={() => openSlotChange(s)}
+                                    >
+                                      🕐 Change Slot
+                                    </button>
+                                  </li>
+                                  <li><hr className="dropdown-divider" /></li>
+                                  <li>
+                                    <button
+                                      className="dropdown-item text-danger"
+                                      onClick={() => openDeactivate(s)}
+                                    >
+                                      🔴 Deactivate
+                                    </button>
+                                  </li>
+                                </ul>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -481,18 +470,6 @@ function ActiveStudents() {
           onClose={() => setSlotTarget(null)}
           onSaved={() => {
             setSlotTarget(null);
-            fetchStudents(page);
-          }}
-        />
-      )}
-
-      {/* ── Advance Payment Modal (Phase 4) ───────────────────── */}
-      {advanceTarget && (
-        <AdvancePaymentModal
-          student={advanceTarget}
-          onClose={() => setAdvanceTarget(null)}
-          onSaved={() => {
-            setAdvanceTarget(null);
             fetchStudents(page);
           }}
         />
