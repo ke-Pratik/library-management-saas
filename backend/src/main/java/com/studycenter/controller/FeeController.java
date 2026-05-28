@@ -32,6 +32,8 @@ import com.studycenter.dto.SlotChangeResponse;
 import jakarta.validation.Valid;
 import java.time.LocalDate;
 import java.util.Map;
+import com.studycenter.dto.AdvancePaymentRequest;
+import com.studycenter.dto.AdvancePaymentResponse;
 
 @RestController
 @RequestMapping("/api/fees")
@@ -145,6 +147,11 @@ public ResponseEntity<List<FeeAdjustment>> getAdjustments(@PathVariable Long fee
 public ResponseEntity<SlotChangeResponse> slotChange(@Valid @RequestBody SlotChangeRequest request) {
     return ResponseEntity.ok(feeService.changeSlotForMonth(request));
 }
-
+    
+@PostMapping("/advance-payment")
+public ResponseEntity<AdvancePaymentResponse> advancePayment(
+        @Valid @RequestBody AdvancePaymentRequest request) {
+    return ResponseEntity.ok(feeService.recordAdvancePayment(request));
+}
     
 }
