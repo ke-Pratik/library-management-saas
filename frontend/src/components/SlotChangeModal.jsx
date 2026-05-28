@@ -10,7 +10,7 @@ export default function SlotChangeModal({ student, onClose, onSaved }) {
   const [saving, setSaving]     = useState(false);
   const [result, setResult]     = useState(null);
 
-  // ── Pre-fill discount + existing slot info from active config ──
+  // Pre-fill from active fee config
   const [currentConfig, setCurrentConfig] = useState(null);
   const [configLoading, setConfigLoading] = useState(true);
 
@@ -21,13 +21,11 @@ export default function SlotChangeModal({ student, onClose, onSaved }) {
         const res = await getActiveConfig(student.regNo);
         if (cancelled) return;
         setCurrentConfig(res.data);
-        // Always pre-fill discount — default to "0" if null
         const cfgDisc = res.data.discountAmount != null
           ? Number(res.data.discountAmount).toFixed(2)
           : "0";
         setDiscount(cfgDisc);
       } catch (err) {
-        // No config — keep default "0"
         if (!cancelled) {
           toast.info("No existing fee config found. Discount defaulted to 0.");
         }
@@ -52,6 +50,15 @@ export default function SlotChangeModal({ student, onClose, onSaved }) {
       });
       setResult(res.data);
       toast.success("Slot changed successfully");
+
+      // 🔔 Highlight wallet credit if any
+      if (res.data.walletCreditAdded && Number(res.data.walletCreditAdded) > 0) {
+        toast.info(
+          `💰 Student overpaid Rs.${res.data.walletCreditAdded} — credited to wallet.`,
+          { autoClose: 6000 }
+        );
+      }
+
       onSaved && onSaved();
     } catch (err) {
       toast.error(err.response?.data?.message || "Failed to change slot");
@@ -132,7 +139,6 @@ export default function SlotChangeModal({ student, onClose, onSaved }) {
                 </div>
               ) : (
                 <form onSubmit={submit}>
-                  {/* ── Prominent info banner ── */}
                   <div className="alert alert-primary py-2 small mb-3">
                     💡 <strong>Existing discount is pre-filled below.</strong>{" "}
                     Edit only if you want to change it.
@@ -151,42 +157,23 @@ export default function SlotChangeModal({ student, onClose, onSaved }) {
                       <label className="form-label fw-semibold">
                         New In Time <span className="text-danger">*</span>
                       </label>
-                      <input
-                        type="time"
-                        className="form-control"
-                        required
-                        value={inTime}
-                        onChange={(e) => setInTime(e.target.value)}
-                        disabled={saving}
-                      />
+                      <input type="time" className="form-control" required
+                        value={inTime} onChange={(e) => setInTime(e.target.value)} disabled={saving} />
                     </div>
                     <div className="col-md-6">
                       <label className="form-label fw-semibold">
                         New Out Time <span className="text-danger">*</span>
                       </label>
-                      <input
-                        type="time"
-                        className="form-control"
-                        required
-                        value={outTime}
-                        onChange={(e) => setOutTime(e.target.value)}
-                        disabled={saving}
-                      />
+                      <input type="time" className="form-control" required
+                        value={outTime} onChange={(e) => setOutTime(e.target.value)} disabled={saving} />
                     </div>
                     <div className="col-md-6">
                       <label className="form-label fw-semibold">
                         Monthly Discount (Rs)
                         <span className="text-muted fw-normal small"> — pro-rated automatically</span>
                       </label>
-                      <input
-                        type="number"
-                        className="form-control"
-                        step="0.01"
-                        min="0"
-                        value={discount}
-                        onChange={(e) => setDiscount(e.target.value)}
-                        disabled={saving}
-                      />
+                      <input type="number" className="form-control" step="0.01" min="0"
+                        value={discount} onChange={(e) => setDiscount(e.target.value)} disabled={saving} />
                       <small className="text-muted">
                         Pre-filled from current plan: Rs.
                         {Number(currentConfig?.discountAmount || 0).toFixed(2)}/month
@@ -196,14 +183,8 @@ export default function SlotChangeModal({ student, onClose, onSaved }) {
                       <label className="form-label fw-semibold">
                         Reason <span className="text-danger">*</span>
                       </label>
-                      <textarea
-                        className="form-control"
-                        required
-                        rows={2}
-                        value={reason}
-                        onChange={(e) => setReason(e.target.value)}
-                        disabled={saving}
-                      />
+                      <textarea className="form-control" required rows={2}
+                        value={reason} onChange={(e) => setReason(e.target.value)} disabled={saving} />
                     </div>
                   </div>
 
