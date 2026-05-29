@@ -12,6 +12,21 @@ import AdvancePaymentModal from "../components/AdvancePaymentModal";
 import ReviseFeeModal from "../components/ReviseFeeModal";
 import WalletModal from "../components/WalletModal";
 
+// ── Date formatter: ISO "2026-05-01" → "01-May-2026" ──
+const formatDate = (iso) => {
+  if (!iso) return "—";
+  try {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return iso;
+    const day   = String(d.getDate()).padStart(2, "0");
+    const month = d.toLocaleString("en-US", { month: "short" });
+    const year  = d.getFullYear();
+    return `${day}-${month}-${year}`;
+  } catch {
+    return iso;
+  }
+};
+
 function FeePayment() {
   const now = new Date();
 
@@ -486,9 +501,10 @@ function FeePayment() {
                 <table className="table table-sm table-hover">
                   <thead className="table-dark">
                     <tr>
-                      <th>Month</th>
+                      <th>Date</th>
                       <th>Slot</th>
                       <th>Fee</th>
+                      <th>Discount</th>
                       <th>Admission</th>
                       <th>Paid</th>
                       <th>Balance</th>
@@ -511,9 +527,10 @@ function FeePayment() {
                               : ""
                         }
                       >
-                        <td className="fw-bold">{r.feeMonth}/{r.feeYear}</td>
+                        <td className="fw-bold">{formatDate(r.joiningDateInMonth)}</td>
                         <td>{r.inTime} - {r.outTime}</td>
                         <td>₹{r.finalFee}</td>
+                        <td>{r.discountAmount > 0 ? `₹${r.discountAmount}` : "—"}</td>
                         <td>{r.admissionFee > 0 ? `₹${r.admissionFee}` : "—"}</td>
                         <td>₹{r.paidAmount}</td>
                         <td className="fw-bold">₹{r.balanceAmount}</td>
@@ -700,7 +717,6 @@ function FeePayment() {
           student={selectedStudentInfo}
           onClose={() => setShowAdvance(false)}
           onSaved={async () => {
-            // 🔧 FIX: do NOT close modal — let admin see result panel
             await refreshFeeData();
           }}
         />
@@ -712,7 +728,6 @@ function FeePayment() {
           feeRecord={reviseTarget}
           onClose={() => setReviseTarget(null)}
           onSaved={async () => {
-            // 🔧 FIX: do NOT close modal — let admin see result panel
             await refreshFeeData();
           }}
         />
