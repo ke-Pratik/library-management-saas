@@ -408,6 +408,9 @@ public class FeeService {
             .findByRegNoAndEffectiveToDateIsNull(regNo)
             .map(StudentFeeConfig::getDiscountAmount)
             .orElse(BigDecimal.ZERO);
+    BigDecimal walletBalance = student.getWalletBalance() != null 
+    ? student.getWalletBalance() : BigDecimal.ZERO;
+   
 
     return StudentFeeStatusResponse.builder()
             .regNo(regNo).studentName(student.getName()).gender(student.getGender())
@@ -419,7 +422,8 @@ public class FeeService {
             .dateOfAdmission(student.getDateOfAdmission() != null
                     ? student.getDateOfAdmission().toString() : null)
             .monthlyDiscount(monthlyDiscount)
-            .monthlyRecords(records).build();
+            .monthlyRecords(records)
+            .walletBalance(walletBalance).build();
 }
     // ═══════════════════════════════════════════════════════════════════
     // ENHANCEMENT #3: ALL STUDENTS FEE STATUS — LEFT JOIN at DB level
