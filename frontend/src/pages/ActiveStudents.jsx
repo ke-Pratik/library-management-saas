@@ -1,12 +1,14 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   getActiveStudents,
+  getActiveStudentsFilterCounts,
   deactivateStudent,
   getStudentByRegNo,
   editStudent,
 } from "../services/api";
 import { toast } from "react-toastify";
 import SlotChangeModal from "../components/SlotChangeModal";
+import StudentDetailsModal from "../components/StudentDetailsModal";
 
 const PAGE_SIZE = 10;
 
@@ -17,16 +19,24 @@ function ActiveStudents() {
   const [page, setPage]                   = useState(0);
   const [loading, setLoading]             = useState(true);
 
-  // ── Row dropdown state (which row's menu is open) ─────────────
+  // ── Filters ─────────────────────────────────────────
+  const [feeStatusFilter, setFeeStatusFilter] = useState("ALL");
+  const [genderFilter,    setGenderFilter]    = useState("ALL");
+  const [counts, setCounts] = useState({
+    total: 0, maleCount: 0, femaleCount: 0,
+    paidCount: 0, partialCount: 0, duesCount: 0,
+  });
+
+  // ── Row dropdown ────────────────────────────────────
   const [openMenuRegNo, setOpenMenuRegNo] = useState(null);
 
-  // ── Deactivate modal ──────────────────────────────────────────
-  const [showDeactivate, setShowDeactivate]       = useState(false);
-  const [deactivateTarget, setDeactivateTarget]   = useState(null);
+  // ── Deactivate modal ────────────────────────────────
+  const [showDeactivate, setShowDeactivate]     = useState(false);
+  const [deactivateTarget, setDeactivateTarget] = useState(null);
   const [deactivateRemarks, setDeactivateRemarks] = useState("");
-  const [deactivating, setDeactivating]           = useState(false);
+  const [deactivating, setDeactivating]         = useState(false);
 
-  // ── Edit modal ────────────────────────────────────────────────
+  // ── Edit modal ──────────────────────────────────────
   const [showEdit, setShowEdit]       = useState(false);
   const [editLoading, setEditLoading] = useState(false);
   const [editSaving, setEditSaving]   = useState(false);
@@ -37,14 +47,18 @@ function ActiveStudents() {
     gender: "", address: "", mobile: "", remarks: "",
   });
 
-  // ── Slot change modal target ──────────────────────────────────
+  // ── Slot change + View Details ──────────────────────
   const [slotTarget, setSlotTarget] = useState(null);
+  const [detailsTarget, setDetailsTarget] = useState(null);
 
-  // ── Fetch active students ─────────────────────────────────────
-  const fetchStudents = useCallback(async (pageNum) => {
+  // ── Fetch students with filters ─────────────────────
+  const fetchStudents = useCallback(async (pageNum, gender, feeStatus) => {
     setLoading(true);
     try {
-      const res = await getActiveStudents({ page: pageNum, size: PAGE_SIZE });
+      const res = await getActiveStudents({
+        page: pageNum, size: PAGE_SIZE,
+        genderFilter: gender, feeStatusFilter: feeStatus,
+      });
       setStudents(res.data.students);
       setTotalElements(res.data.totalElements);
       setTotalPages(res.data.totalPages);
@@ -55,16 +69,40 @@ function ActiveStudents() {
     }
   }, []);
 
-  useEffect(() => { fetchStudents(page); }, [page, fetchStudents]);
+  // ── Fetch filter pill counts ────────────────────────
+  const fetchCounts = useCallback(async () => {
+    try {
+      const res = await getActiveStudentsFilterCounts();
+      setCounts(res.data);
+    } catch {
+      // silent — counts are nice-to-have
+    }
+  }, []);
 
-  // ── Close dropdown on outside click ───────────────────────────
+  useEffect(() => {
+    fetchStudents(page, genderFilter, feeStatusFilter);
+  }, [page, genderFilter, feeStatusFilter, fetchStudents]);
+
+  useEffect(() => { fetchCounts(); }, [fetchCounts]);
+
+  // ── Close dropdown on outside click ─────────────────
   useEffect(() => {
     const handler = () => setOpenMenuRegNo(null);
     document.addEventListener("click", handler);
     return () => document.removeEventListener("click", handler);
   }, []);
 
-  // ── Deactivate handlers ───────────────────────────────────────
+  // ── Filter handlers — reset to page 0 when changed ──
+  const handleFeeStatusFilter = (value) => {
+    setFeeStatusFilter(value);
+    setPage(0);
+  };
+  const handleGenderFilter = (value) => {
+    setGenderFilter(value);
+    setPage(0);
+  };
+
+  // ── Deactivate handlers ─────────────────────────────
   const openDeactivate = (s) => {
     setOpenMenuRegNo(null);
     setDeactivateTarget(s);
@@ -76,7 +114,6 @@ function ActiveStudents() {
     setShowDeactivate(false);
     setDeactivateTarget(null);
   };
-
   const confirmDeactivate = async () => {
     if (!deactivateTarget) return;
     setDeactivating(true);
@@ -87,7 +124,8 @@ function ActiveStudents() {
       });
       toast.success(res.data.message || "Student deactivated");
       closeDeactivate();
-      fetchStudents(page);
+      fetchStudents(page, genderFilter, feeStatusFilter);
+      fetchCounts();
     } catch (err) {
       toast.error(err.response?.data?.message || "Failed to deactivate");
     } finally {
@@ -95,7 +133,7 @@ function ActiveStudents() {
     }
   };
 
-  // ── Edit handlers ─────────────────────────────────────────────
+  // ── Edit handlers ───────────────────────────────────
   const openEdit = async (s) => {
     setOpenMenuRegNo(null);
     setEditRegNo(s.regNo);
@@ -106,13 +144,10 @@ function ActiveStudents() {
       const res = await getStudentByRegNo(s.regNo);
       const d   = res.data;
       setEditForm({
-        name:       d.name       || "",
-        fatherName: d.fatherName || "",
-        aadhaarNo:  d.aadhaarNo  || "",
-        gender:     d.gender     || "",
-        address:    d.address    || "",
-        mobile:     d.mobile     || "",
-        remarks:    d.remarks    || "",
+        name: d.name || "", fatherName: d.fatherName || "",
+        aadhaarNo: d.aadhaarNo || "", gender: d.gender || "",
+        address: d.address || "", mobile: d.mobile || "",
+        remarks: d.remarks || "",
       });
     } catch (err) {
       toast.error(err.response?.data?.message || "Failed to load student data");
@@ -121,33 +156,28 @@ function ActiveStudents() {
       setEditLoading(false);
     }
   };
-
   const closeEdit = () => {
     if (editSaving) return;
-    setShowEdit(false);
-    setEditSuccess(false);
-    setEditRegNo(null);
+    setShowEdit(false); setEditSuccess(false); setEditRegNo(null);
   };
-
   const handleEditChange = (e) =>
     setEditForm((f) => ({ ...f, [e.target.name]: e.target.value }));
-
   const submitEdit = async (e) => {
     e.preventDefault();
     setEditSaving(true);
     try {
       const res = await editStudent(editRegNo, {
-        name:       editForm.name.trim(),
+        name: editForm.name.trim(),
         fatherName: editForm.fatherName.trim() || null,
-        aadhaarNo:  editForm.aadhaarNo.trim(),
-        gender:     editForm.gender,
-        address:    editForm.address.trim(),
-        mobile:     editForm.mobile.trim(),
-        remarks:    editForm.remarks.trim() || null,
+        aadhaarNo: editForm.aadhaarNo.trim(),
+        gender: editForm.gender,
+        address: editForm.address.trim(),
+        mobile: editForm.mobile.trim(),
+        remarks: editForm.remarks.trim() || null,
       });
       toast.success(res.data.message || "Student updated");
       setEditSuccess(true);
-      fetchStudents(page);
+      fetchStudents(page, genderFilter, feeStatusFilter);
     } catch (err) {
       toast.error(err.response?.data?.message || "Failed to update student");
     } finally {
@@ -155,33 +185,58 @@ function ActiveStudents() {
     }
   };
 
-  // ── Slot change handler ───────────────────────────────────────
-  const openSlotChange = (s) => {
-    setOpenMenuRegNo(null);
-    setSlotTarget(s);
-  };
+  const openSlotChange = (s) => { setOpenMenuRegNo(null); setSlotTarget(s); };
+  const openDetails    = (s) => { setOpenMenuRegNo(null); setDetailsTarget(s); };
 
-  // ── Toggle row dropdown ───────────────────────────────────────
   const toggleMenu = (e, regNo) => {
     e.stopPropagation();
     setOpenMenuRegNo((cur) => (cur === regNo ? null : regNo));
   };
 
-  // ── Fee status badge ──────────────────────────────────────────
   const feeStatusBadge = (status) => {
-    if (status === "PAID")
-      return <span className="badge bg-success">✅ PAID</span>;
-    if (status === "PARTIAL")
-      return <span className="badge bg-warning text-dark">🔶 PARTIAL</span>;
+    if (status === "PAID")    return <span className="badge bg-success">✅ PAID</span>;
+    if (status === "PARTIAL") return <span className="badge bg-warning text-dark">🔶 PARTIAL</span>;
     return <span className="badge bg-danger">🔴 DUES</span>;
   };
+
+  // ── Pill button helper ──────────────────────────────
+  const FilterPill = ({ active, onClick, children }) => (
+    <button
+      type="button"
+      className={`btn btn-sm ${active ? "btn-primary" : "btn-outline-secondary"} me-2 mb-2`}
+      onClick={onClick}
+    >
+      {children}
+    </button>
+  );
 
   return (
     <div>
       <h2 className="page-title">
         👥 Active Students{" "}
-        {!loading && <span className="fs-6 fw-normal text-muted">({totalElements} total)</span>}
+        {!loading && (
+          <span className="fs-6 fw-normal text-muted">
+            ({totalElements} {totalElements === counts.total ? "total" : `of ${counts.total}`})
+          </span>
+        )}
       </h2>
+
+      {/* ── FILTER PILLS ─────────────────────────────── */}
+      <div className="mb-3 p-3 bg-light rounded border">
+        <div className="mb-2">
+          <strong className="me-2 small text-muted">Fee Status:</strong>
+          <FilterPill active={feeStatusFilter === "ALL"}     onClick={() => handleFeeStatusFilter("ALL")}>● All ({counts.total})</FilterPill>
+          <FilterPill active={feeStatusFilter === "PAID"}    onClick={() => handleFeeStatusFilter("PAID")}>✅ Paid ({counts.paidCount})</FilterPill>
+          <FilterPill active={feeStatusFilter === "PARTIAL"} onClick={() => handleFeeStatusFilter("PARTIAL")}>🔶 Partial ({counts.partialCount})</FilterPill>
+          <FilterPill active={feeStatusFilter === "DUES"}    onClick={() => handleFeeStatusFilter("DUES")}>🔴 Dues ({counts.duesCount})</FilterPill>
+        </div>
+        <div>
+          <strong className="me-2 small text-muted">Gender:</strong>
+          <FilterPill active={genderFilter === "ALL"}    onClick={() => handleGenderFilter("ALL")}>● All ({counts.total})</FilterPill>
+          <FilterPill active={genderFilter === "Male"}   onClick={() => handleGenderFilter("Male")}>♂ Male ({counts.maleCount})</FilterPill>
+          <FilterPill active={genderFilter === "Female"} onClick={() => handleGenderFilter("Female")}>♀ Female ({counts.femaleCount})</FilterPill>
+        </div>
+      </div>
 
       {loading ? (
         <div className="text-center mt-5">
@@ -201,11 +256,10 @@ function ActiveStudents() {
               </thead>
               <tbody>
                 {students.length === 0 ? (
-                  <tr><td colSpan="10" className="text-center py-5 text-muted"><div className="fs-5">📭</div>No active students found</td></tr>
+                  <tr><td colSpan="10" className="text-center py-5 text-muted"><div className="fs-5">📭</div>No students match the current filters</td></tr>
                 ) : (
                   students.map((s, idx) => {
                     const isNearBottom = idx >= students.length - 2;
-
                     return (
                       <tr key={s.regNo}>
                         <td className="text-muted">{page * PAGE_SIZE + idx + 1}</td>
@@ -232,10 +286,7 @@ function ActiveStudents() {
 
                         <td>
                           <div className="d-flex gap-2 align-items-center">
-                            <button
-                              className="btn btn-sm btn-outline-primary"
-                              onClick={() => openEdit(s)}
-                            >
+                            <button className="btn btn-sm btn-outline-primary" onClick={() => openEdit(s)}>
                               ✏️ Edit
                             </button>
 
@@ -253,30 +304,27 @@ function ActiveStudents() {
                                 <ul
                                   className="dropdown-menu show shadow"
                                   style={{
-                                    position: "absolute",
-                                    right: 0,
+                                    position: "absolute", right: 0,
                                     ...(isNearBottom
                                       ? { bottom: "100%", marginBottom: "4px" }
                                       : { top: "100%", marginTop: "4px" }),
-                                    minWidth: "200px",
-                                    zIndex: 1050,
+                                    minWidth: "200px", zIndex: 1050,
                                   }}
                                   onClick={(e) => e.stopPropagation()}
                                 >
                                   <li>
-                                    <button
-                                      className="dropdown-item"
-                                      onClick={() => openSlotChange(s)}
-                                    >
+                                    <button className="dropdown-item" onClick={() => openSlotChange(s)}>
                                       🕐 Change Slot
+                                    </button>
+                                  </li>
+                                  <li>
+                                    <button className="dropdown-item" onClick={() => openDetails(s)}>
+                                      👁️ View Details
                                     </button>
                                   </li>
                                   <li><hr className="dropdown-divider" /></li>
                                   <li>
-                                    <button
-                                      className="dropdown-item text-danger"
-                                      onClick={() => openDeactivate(s)}
-                                    >
+                                    <button className="dropdown-item text-danger" onClick={() => openDeactivate(s)}>
                                       🔴 Deactivate
                                     </button>
                                   </li>
@@ -296,7 +344,7 @@ function ActiveStudents() {
           {totalPages > 1 && (
             <div className="d-flex justify-content-between align-items-center mt-3 flex-wrap gap-2">
               <span className="text-muted small">
-                Showing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, totalElements)} of {totalElements} students
+                Showing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, totalElements)} of {totalElements}
               </span>
               <div className="d-flex align-items-center gap-2">
                 <button className="btn btn-sm btn-outline-secondary" disabled={page === 0} onClick={() => setPage(0)}>« First</button>
@@ -310,7 +358,7 @@ function ActiveStudents() {
         </>
       )}
 
-      {/* ── Deactivate Modal ──────────────────────────────────── */}
+      {/* ── Deactivate Modal ─────────────────── */}
       {showDeactivate && (
         <>
           <div className="modal-backdrop fade show" onClick={closeDeactivate} />
@@ -340,7 +388,7 @@ function ActiveStudents() {
                 </div>
                 <div className="modal-footer">
                   <button className="btn btn-secondary" onClick={closeDeactivate} disabled={deactivating}>Cancel</button>
-                  <button className="btn btn-danger"    onClick={confirmDeactivate} disabled={deactivating}>
+                  <button className="btn btn-danger" onClick={confirmDeactivate} disabled={deactivating}>
                     {deactivating ? <><span className="spinner-border spinner-border-sm me-2" />Deactivating...</> : "🔴 Yes, Deactivate"}
                   </button>
                 </div>
@@ -350,47 +398,38 @@ function ActiveStudents() {
         </>
       )}
 
-      {/* ── Edit Modal ────────────────────────────────────────── */}
+      {/* ── Edit Modal ─────────────────────────── */}
       {showEdit && (
         <>
           <div className="modal-backdrop fade show" onClick={closeEdit} />
           <div className="modal fade show d-block" tabIndex="-1" role="dialog">
             <div className="modal-dialog modal-dialog-centered modal-lg" role="document">
               <div className="modal-content">
-
                 <div className="modal-header">
                   <h5 className="modal-title fw-bold">✏️ Edit Student — Reg No: {editRegNo}</h5>
                   <button type="button" className="btn-close" onClick={closeEdit} disabled={editSaving} />
                 </div>
-
                 <div className="modal-body">
                   {editLoading ? (
                     <div className="text-center py-4">
                       <div className="spinner-border text-primary" role="status" />
                       <p className="mt-2 text-muted">Loading student data...</p>
                     </div>
-
                   ) : editSuccess ? (
-                    <div className="alert alert-success">
-                      ✅ Student details updated successfully.
-                    </div>
-
+                    <div className="alert alert-success">✅ Student details updated successfully.</div>
                   ) : (
                     <form id="editStudentForm" onSubmit={submitEdit}>
                       <div className="row g-3">
-
                         <div className="col-md-6">
                           <label className="form-label fw-semibold">Name <span className="text-danger">*</span></label>
                           <input type="text" className="form-control" name="name"
                             value={editForm.name} onChange={handleEditChange} required disabled={editSaving} />
                         </div>
-
                         <div className="col-md-6">
                           <label className="form-label fw-semibold">Father's Name</label>
                           <input type="text" className="form-control" name="fatherName"
                             value={editForm.fatherName} onChange={handleEditChange} disabled={editSaving} />
                         </div>
-
                         <div className="col-md-6">
                           <label className="form-label fw-semibold">Aadhaar No <span className="text-danger">*</span></label>
                           <input type="text" className="form-control" name="aadhaarNo"
@@ -398,7 +437,6 @@ function ActiveStudents() {
                             maxLength={12} pattern="\d{12}" title="Must be exactly 12 digits"
                             required disabled={editSaving} />
                         </div>
-
                         <div className="col-md-6">
                           <label className="form-label fw-semibold">Mobile <span className="text-danger">*</span></label>
                           <input type="text" className="form-control" name="mobile"
@@ -406,7 +444,6 @@ function ActiveStudents() {
                             maxLength={10} pattern="\d{10}" title="Must be exactly 10 digits"
                             required disabled={editSaving} />
                         </div>
-
                         <div className="col-md-6">
                           <label className="form-label fw-semibold">Gender <span className="text-danger">*</span></label>
                           <select className="form-select" name="gender"
@@ -417,26 +454,22 @@ function ActiveStudents() {
                             <option value="Female">Female</option>
                           </select>
                         </div>
-
                         <div className="col-12">
                           <label className="form-label fw-semibold">Address <span className="text-danger">*</span></label>
                           <textarea className="form-control" name="address" rows={2}
                             value={editForm.address} onChange={handleEditChange}
                             required disabled={editSaving} />
                         </div>
-
                         <div className="col-12">
                           <label className="form-label fw-semibold">Remarks</label>
                           <textarea className="form-control" name="remarks" rows={2}
                             value={editForm.remarks} onChange={handleEditChange}
                             disabled={editSaving} />
                         </div>
-
                       </div>
                     </form>
                   )}
                 </div>
-
                 <div className="modal-footer">
                   {editSuccess ? (
                     <button className="btn btn-primary" onClick={closeEdit}>Close</button>
@@ -444,29 +477,35 @@ function ActiveStudents() {
                     <>
                       <button className="btn btn-secondary" onClick={closeEdit} disabled={editSaving || editLoading}>Cancel</button>
                       <button type="submit" form="editStudentForm" className="btn btn-primary" disabled={editSaving || editLoading}>
-                        {editSaving
-                          ? <><span className="spinner-border spinner-border-sm me-2" />Saving...</>
-                          : "💾 Save Changes"}
+                        {editSaving ? <><span className="spinner-border spinner-border-sm me-2" />Saving...</> : "💾 Save Changes"}
                       </button>
                     </>
                   )}
                 </div>
-
               </div>
             </div>
           </div>
         </>
       )}
 
-      {/* ── Slot Change Modal — KEEP OPEN AFTER SAVE so admin sees result ── */}
+      {/* ── Slot Change Modal ──────────────────── */}
       {slotTarget && (
         <SlotChangeModal
           student={slotTarget}
           onClose={() => setSlotTarget(null)}
           onSaved={() => {
-            // 🔧 FIX: do NOT setSlotTarget(null) here — modal must stay open to show result panel
-            fetchStudents(page);
+            fetchStudents(page, genderFilter, feeStatusFilter);
+            fetchCounts();
           }}
+        />
+      )}
+
+      {/* ── View Details Modal (NEW) ───────────── */}
+      {detailsTarget && (
+        <StudentDetailsModal
+          regNo={detailsTarget.regNo}
+          studentName={detailsTarget.name}
+          onClose={() => setDetailsTarget(null)}
         />
       )}
     </div>

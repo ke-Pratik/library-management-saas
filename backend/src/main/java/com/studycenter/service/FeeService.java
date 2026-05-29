@@ -388,30 +388,39 @@ public class FeeService {
     // ═══════════════════════════════════════════════════════════════════
     // STUDENT FEE STATUS
     // ═══════════════════════════════════════════════════════════════════
-    public StudentFeeStatusResponse getStudentFeeStatus(Long regNo) {
-        Student student = studentRepository.findById(regNo)
-                .orElseThrow(() -> new StudentNotFoundException("Student " + regNo + " not found."));
+   public StudentFeeStatusResponse getStudentFeeStatus(Long regNo) {
+    Student student = studentRepository.findById(regNo)
+            .orElseThrow(() -> new StudentNotFoundException("Student " + regNo + " not found."));
 
-        List<FeeRecord> records = feeRecordRepository.findByRegNoOrderByFeeYearDescFeeMonthDesc(regNo);
+    List<FeeRecord> records = feeRecordRepository.findByRegNoOrderByFeeYearDescFeeMonthDesc(regNo);
 
-        BigDecimal totalFee     = records.stream().map(FeeRecord::getFinalFee).reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal totalPaid    = records.stream().map(FeeRecord::getPaidAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal totalBalance = records.stream().map(FeeRecord::getBalanceAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+    BigDecimal totalFee     = records.stream().map(FeeRecord::getFinalFee).reduce(BigDecimal.ZERO, BigDecimal::add);
+    BigDecimal totalPaid    = records.stream().map(FeeRecord::getPaidAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+    BigDecimal totalBalance = records.stream().map(FeeRecord::getBalanceAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        List<SeatBooking> bookings = seatBookingRepository.findByRegNoOrderBySeatNoAscStartTimeAsc(regNo);
-        Integer seatNo  = bookings.isEmpty() ? null : bookings.get(0).getSeatNo();
-        String timeSlot = bookings.isEmpty() ? null :
-                bookings.get(0).getStartTime().format(TIME_FMT) + " - " + bookings.get(0).getEndTime().format(TIME_FMT);
+    List<SeatBooking> bookings = seatBookingRepository.findByRegNoOrderBySeatNoAscStartTimeAsc(regNo);
+    Integer seatNo  = bookings.isEmpty() ? null : bookings.get(0).getSeatNo();
+    String timeSlot = bookings.isEmpty() ? null :
+            bookings.get(0).getStartTime().format(TIME_FMT) + " - " + bookings.get(0).getEndTime().format(TIME_FMT);
 
-        return StudentFeeStatusResponse.builder()
-                .regNo(regNo).studentName(student.getName()).gender(student.getGender())
-                .mobile(student.getMobile()).isActive(student.getIsActive())
-                .seatNo(seatNo).timeSlot(timeSlot).totalMonths(records.size())
-                .totalFee(totalFee).totalPaid(totalPaid).totalBalance(totalBalance)
-                .overallStatus(totalBalance.compareTo(BigDecimal.ZERO) <= 0 ? "ALL_PAID" : "HAS_PENDING")
-                .monthlyRecords(records).build();
-    }
+    // ── NEW: get current monthly discount from active FeeConfig ──
+    BigDecimal monthlyDiscount = feeConfigRepository
+            .findByRegNoAndEffectiveToDateIsNull(regNo)
+            .map(StudentFeeConfig::getDiscountAmount)
+            .orElse(BigDecimal.ZERO);
 
+    return StudentFeeStatusResponse.builder()
+            .regNo(regNo).studentName(student.getName()).gender(student.getGender())
+            .mobile(student.getMobile()).isActive(student.getIsActive())
+            .seatNo(seatNo).timeSlot(timeSlot).totalMonths(records.size())
+            .totalFee(totalFee).totalPaid(totalPaid).totalBalance(totalBalance)
+            .overallStatus(totalBalance.compareTo(BigDecimal.ZERO) <= 0 ? "ALL_PAID" : "HAS_PENDING")
+            // ── NEW fields ──
+            .dateOfAdmission(student.getDateOfAdmission() != null
+                    ? student.getDateOfAdmission().toString() : null)
+            .monthlyDiscount(monthlyDiscount)
+            .monthlyRecords(records).build();
+}
     // ═══════════════════════════════════════════════════════════════════
     // ENHANCEMENT #3: ALL STUDENTS FEE STATUS — LEFT JOIN at DB level
     // Single query returns all active students; NULL fee cols → NO_RECORD

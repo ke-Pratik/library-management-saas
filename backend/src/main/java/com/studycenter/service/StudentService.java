@@ -1,6 +1,7 @@
 package com.studycenter.service;
 
 import com.studycenter.dto.ActiveStudentDto;
+import com.studycenter.dto.ActiveStudentsCountsResponse;
 import com.studycenter.dto.ActiveStudentsPageResponse;
 import com.studycenter.dto.DeactivateReactivateRequest;
 import com.studycenter.dto.DeactivateReactivateResponse;
@@ -16,6 +17,7 @@ import com.studycenter.entity.Student;
 import com.studycenter.exception.InvalidRequestException;
 import com.studycenter.exception.StudentNotFoundException;
 import com.studycenter.repository.ActiveStudentProjection;
+import com.studycenter.repository.ActiveStudentsCountsProjection;
 import com.studycenter.repository.SeatBookingRepository;
 import com.studycenter.repository.StudentRepository;
 import lombok.RequiredArgsConstructor;
@@ -43,12 +45,8 @@ public class StudentService {
 
     private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("HH:mm");
 
-    // ═══════════════════════════════════════════════════════════════
-    // REGISTER STUDENT
-    // ═══════════════════════════════════════════════════════════════
     @Transactional
     public StudentRegisterResponse registerStudent(StudentRegisterRequest request) {
-
         log.info("Registering: regNo={}, name={}", request.getRegNo(), request.getName());
 
         if (studentRepository.existsById(request.getRegNo()))
@@ -83,7 +81,6 @@ public class StudentService {
                 .build();
 
         studentRepository.save(student);
-        log.info("Student registered: regNo={}", request.getRegNo());
 
         FeeLockRequest feeLockRequest = FeeLockRequest.builder()
                 .regNo(request.getRegNo())
@@ -96,7 +93,6 @@ public class StudentService {
                 .build();
 
         FeeCalculateResponse feeResult = feeService.lockFee(feeLockRequest);
-        log.info("Fee auto-locked: feeId={}, finalFee={}", feeResult.getFeeId(), feeResult.getFinalFee());
 
         return StudentRegisterResponse.builder()
                 .message("Student registered and fee locked successfully!")
@@ -120,17 +116,10 @@ public class StudentService {
                 .build();
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // DEACTIVATE
-    // ═══════════════════════════════════════════════════════════════
     @Transactional
     public DeactivateReactivateResponse deactivateStudent(DeactivateReactivateRequest request) {
-
-        log.info("Deactivating: regNo={}", request.getRegNo());
-
         Student student = studentRepository.findById(request.getRegNo())
                 .orElseThrow(() -> new StudentNotFoundException("Student " + request.getRegNo() + " not found."));
-
         if (!student.getIsActive())
             throw new InvalidRequestException("Student " + request.getRegNo() + " is already inactive.");
 
@@ -141,8 +130,6 @@ public class StudentService {
 
         long cancelled = seatBookingRepository.countByRegNo(request.getRegNo());
         seatBookingRepository.deleteByRegNo(request.getRegNo());
-
-        log.info("Deactivated: regNo={}, bookingsCancelled={}", request.getRegNo(), cancelled);
 
         return DeactivateReactivateResponse.builder()
                 .message("Student deactivated successfully!")
@@ -155,17 +142,10 @@ public class StudentService {
                 .build();
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // REACTIVATE
-    // ═══════════════════════════════════════════════════════════════
     @Transactional
     public DeactivateReactivateResponse reactivateStudent(DeactivateReactivateRequest request) {
-
-        log.info("Reactivating: regNo={}", request.getRegNo());
-
         Student student = studentRepository.findById(request.getRegNo())
                 .orElseThrow(() -> new StudentNotFoundException("Student " + request.getRegNo() + " not found."));
-
         if (student.getIsActive())
             throw new InvalidRequestException("Student " + request.getRegNo() + " is already active.");
 
@@ -184,23 +164,14 @@ public class StudentService {
                 .build();
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // GET BY ID — pre-fill edit form
-    // ═══════════════════════════════════════════════════════════════
     public StudentDetailResponse getStudentById(Long regNo) {
         Student student = studentRepository.findById(regNo)
                 .orElseThrow(() -> new StudentNotFoundException("Student " + regNo + " not found."));
         return toDetailResponse(student);
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // EDIT STUDENT — basic fields only
-    // ═══════════════════════════════════════════════════════════════
     @Transactional
     public StudentEditResponse editStudent(Long regNo, StudentEditRequest request) {
-
-        log.info("Editing student: regNo={}", regNo);
-
         Student student = studentRepository.findById(regNo)
                 .orElseThrow(() -> new StudentNotFoundException("Student " + regNo + " not found."));
 
@@ -220,8 +191,6 @@ public class StudentService {
         student.setRemarks(request.getRemarks());
         studentRepository.save(student);
 
-        log.info("Student updated: regNo={}", regNo);
-
         return StudentEditResponse.builder()
                 .message("Student details updated successfully.")
                 .regNo(regNo)
@@ -239,9 +208,6 @@ public class StudentService {
                 .build();
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // EXISTING METHODS
-    // ═══════════════════════════════════════════════════════════════
     public List<StudentDetailResponse> getActiveStudents() {
         return studentRepository.findByIsActiveTrue().stream().map(this::toDetailResponse).toList();
     }
@@ -261,7 +227,6 @@ public class StudentService {
     }
 
     public List<StudentDetailResponse> searchStudents(String type, String value) {
-        log.info("Searching students: type={}, value={}", type, value);
         if (type  == null || type.trim().isEmpty())  throw new InvalidRequestException("Search type cannot be empty.");
         if (value == null || value.trim().isEmpty()) throw new InvalidRequestException("Search value cannot be empty.");
 
@@ -282,7 +247,6 @@ public class StudentService {
     }
 
     public List<StudentDetailResponse> searchByName(String name) {
-        log.info("Searching: name={}", name);
         if (name == null || name.trim().isEmpty()) throw new InvalidRequestException("Search name cannot be empty.");
         return studentRepository.searchByName(name.trim()).stream().map(this::toDetailResponse).toList();
     }
@@ -294,7 +258,7 @@ public class StudentService {
                 .gender(s.getGender()).mobile(s.getMobile())
                 .address(s.getAddress()).aadhaarNo(s.getAadhaarNo())
                 .dateOfAdmission(s.getDateOfAdmission() != null ? s.getDateOfAdmission().toString() : null)
-                .inTime(s.getInTime()   != null ? s.getInTime().format(TIME_FMT)  : null)
+                .inTime(s.getInTime()  != null ? s.getInTime().format(TIME_FMT)  : null)
                 .outTime(s.getOutTime() != null ? s.getOutTime().format(TIME_FMT) : null)
                 .isActive(s.getIsActive())
                 .deactivationDate(s.getDeactivationDate() != null ? s.getDeactivationDate().toString() : null)
@@ -302,16 +266,45 @@ public class StudentService {
                 .build();
     }
 
-    public ActiveStudentsPageResponse getActiveStudentsPaged(int page, int size) {
-        LocalDate today    = LocalDate.now();
+    // ═══════════════════════════════════════════════════════════════════
+    // ACTIVE STUDENTS — paginated with filters
+    // ═══════════════════════════════════════════════════════════════════
+    public ActiveStudentsPageResponse getActiveStudentsPaged(int page, int size,
+                                                              String genderFilter,
+                                                              String feeStatusFilter) {
+        LocalDate today = LocalDate.now();
         Pageable  pageable = PageRequest.of(page, size);
+
+        String gender = (genderFilter == null || genderFilter.isBlank()) ? "ALL" : genderFilter;
+        String feeSt  = (feeStatusFilter == null || feeStatusFilter.isBlank()) ? "ALL" : feeStatusFilter.toUpperCase();
+
         Page<ActiveStudentProjection> result = studentRepository
-                .findActiveStudentsWithDetails(today.getMonthValue(), today.getYear(), pageable);
+                .findActiveStudentsWithDetails(
+                        today.getMonthValue(), today.getYear(),
+                        gender, feeSt, pageable);
 
         return ActiveStudentsPageResponse.builder()
                 .students(result.getContent().stream().map(this::mapProjectionToDto).toList())
                 .page(result.getNumber()).size(result.getSize())
                 .totalElements(result.getTotalElements()).totalPages(result.getTotalPages())
+                .build();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // FILTER PILL COUNTS — gender + fee status breakdown
+    // ═══════════════════════════════════════════════════════════════════
+    public ActiveStudentsCountsResponse getActiveStudentsFilterCounts() {
+        LocalDate today = LocalDate.now();
+        ActiveStudentsCountsProjection p = studentRepository.getActiveStudentsCounts(
+                today.getMonthValue(), today.getYear());
+
+        return ActiveStudentsCountsResponse.builder()
+                .total(p.getTotal())
+                .maleCount(p.getMaleCount())
+                .femaleCount(p.getFemaleCount())
+                .paidCount(p.getPaidCount())
+                .partialCount(p.getPartialCount())
+                .duesCount(p.getDuesCount())
                 .build();
     }
 

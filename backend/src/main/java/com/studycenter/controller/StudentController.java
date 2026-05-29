@@ -1,5 +1,6 @@
 package com.studycenter.controller;
 
+import com.studycenter.dto.ActiveStudentsCountsResponse;
 import com.studycenter.dto.ActiveStudentsPageResponse;
 import com.studycenter.dto.DeactivateReactivateRequest;
 import com.studycenter.dto.DeactivateReactivateResponse;
@@ -45,11 +46,21 @@ public class StudentController {
         return ResponseEntity.ok(studentService.reactivateStudent(request));
     }
 
+    // ── Active students — paginated with optional filters ──
     @GetMapping("/active")
     public ResponseEntity<ActiveStudentsPageResponse> active(
-            @RequestParam(defaultValue = "0")  int page,
-            @RequestParam(defaultValue = "10") int size) {
-        return ResponseEntity.ok(studentService.getActiveStudentsPaged(page, size));
+            @RequestParam(defaultValue = "0")    int page,
+            @RequestParam(defaultValue = "10")   int size,
+            @RequestParam(defaultValue = "ALL")  String genderFilter,
+            @RequestParam(defaultValue = "ALL")  String feeStatusFilter) {
+        return ResponseEntity.ok(
+                studentService.getActiveStudentsPaged(page, size, genderFilter, feeStatusFilter));
+    }
+
+    // ── NEW: filter pill counts ──
+    @GetMapping("/active/counts")
+    public ResponseEntity<ActiveStudentsCountsResponse> activeCounts() {
+        return ResponseEntity.ok(studentService.getActiveStudentsFilterCounts());
     }
 
     @GetMapping("/inactive")

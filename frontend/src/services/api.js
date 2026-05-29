@@ -92,5 +92,6 @@ export const getWallet           = (regNo)       => API.get(`/students/${regNo}/
 export const getWalletTx         = (regNo)       => API.get(`/students/${regNo}/wallet/transactions`);
 export const refundWalletCash    = (regNo, data) => API.post(`/students/${regNo}/wallet/refund-cash`, data);
 export const getActiveConfig = (regNo) => API.get(`/fees/active-config/${regNo}`);
+export const getActiveStudentsFilterCounts = () => API.get("/students/active/counts");
 
 export default API;

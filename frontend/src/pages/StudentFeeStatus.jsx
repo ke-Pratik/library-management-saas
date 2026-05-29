@@ -1,27 +1,31 @@
-
-// export default StudentFeeStatus;
 import { useState } from "react";
 import { getStudentFeeStatus, searchStudents } from "../services/api";
 import { toast } from "react-toastify";
 
+// ── Date formatter: ISO "2026-05-01" → "01-May-2026" ──
+const formatDate = (iso) => {
+  if (!iso) return "—";
+  try {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return iso;
+    const day   = String(d.getDate()).padStart(2, "0");
+    const month = d.toLocaleString("en-US", { month: "short" });
+    const year  = d.getFullYear();
+    return `${day}-${month}-${year}`;
+  } catch {
+    return iso;
+  }
+};
+
 function StudentFeeStatus() {
-  // ═══════════════════════════════════════
-  // STUDENT SEARCH
-  // ═══════════════════════════════════════
-  const [searchType, setSearchType] = useState("name");
-  const [searchValue, setSearchValue] = useState("");
+  const [searchType, setSearchType]     = useState("name");
+  const [searchValue, setSearchValue]   = useState("");
   const [searchResults, setSearchResults] = useState(null);
   const [searchLoading, setSearchLoading] = useState(false);
 
-  // ═══════════════════════════════════════
-  // SELECTED STUDENT DATA
-  // ═══════════════════════════════════════
-  const [data, setData] = useState(null);
+  const [data, setData]       = useState(null);
   const [loading, setLoading] = useState(false);
 
-  // ═══════════════════════════════════════
-  // SEARCH STUDENTS
-  // ═══════════════════════════════════════
   const handleSearch = async (e) => {
     e.preventDefault();
     if (!searchValue.trim()) {
@@ -42,9 +46,6 @@ function StudentFeeStatus() {
     }
   };
 
-  // ═══════════════════════════════════════
-  // SELECT STUDENT → fetch fee history
-  // ═══════════════════════════════════════
   const handleSelectStudent = async (student) => {
     setSearchResults(null);
     setSearchValue("");
@@ -61,28 +62,20 @@ function StudentFeeStatus() {
     }
   };
 
-  // ═══════════════════════════════════════
-  // RESET
-  // ═══════════════════════════════════════
   const handleReset = () => {
     setData(null);
     setSearchResults(null);
     setSearchValue("");
   };
 
-  // ═══════════════════════════════════════
-  // STATUS BADGE
-  // ═══════════════════════════════════════
   const statusBadge = (s) => {
-    if (s === "PAID") return <span className="badge bg-success">✅ PAID</span>;
-    if (s === "PARTIAL")
-      return <span className="badge bg-warning text-dark">🔶 PARTIAL</span>;
+    if (s === "PAID")    return <span className="badge bg-success">✅ PAID</span>;
+    if (s === "PARTIAL") return <span className="badge bg-warning text-dark">🔶 PARTIAL</span>;
     return <span className="badge bg-secondary">⏳ PENDING</span>;
   };
 
   const overallBadge = (s) => {
-    if (s === "ALL_PAID")
-      return <span className="badge bg-success fs-6">✅ ALL PAID</span>;
+    if (s === "ALL_PAID") return <span className="badge bg-success fs-6">✅ ALL PAID</span>;
     return <span className="badge bg-danger fs-6">⚠️ HAS PENDING</span>;
   };
 
@@ -90,20 +83,12 @@ function StudentFeeStatus() {
     <div>
       <h2 className="page-title">📋 Student Details</h2>
 
-      {/* ─── SEARCH ──────────────────────────── */}
       <div className="form-section col-lg-8 mb-4">
         <h5 className="fw-bold mb-3">🔍 Find Student</h5>
         <form onSubmit={handleSearch} className="row g-2">
           <div className="col-md-3">
-            <select
-              className="form-select"
-              value={searchType}
-              onChange={(e) => {
-                setSearchType(e.target.value);
-                setSearchValue("");
-                setSearchResults(null);
-              }}
-            >
+            <select className="form-select" value={searchType}
+              onChange={(e) => { setSearchType(e.target.value); setSearchValue(""); setSearchResults(null); }}>
               <option value="name">Name</option>
               <option value="regNo">Reg No</option>
               <option value="mobile">Mobile No</option>
@@ -114,40 +99,23 @@ function StudentFeeStatus() {
               type={searchType === "regNo" ? "number" : "text"}
               className="form-control"
               placeholder={
-                searchType === "regNo"
-                  ? "Enter Reg No..."
-                  : searchType === "mobile"
-                    ? "Enter mobile number..."
-                    : "Type student name..."
+                searchType === "regNo"  ? "Enter Reg No..."  :
+                searchType === "mobile" ? "Enter mobile..." : "Type student name..."
               }
-              value={searchValue}
-              onChange={(e) => setSearchValue(e.target.value)}
-            />
+              value={searchValue} onChange={(e) => setSearchValue(e.target.value)} />
           </div>
           <div className="col-md-3">
-            <button
-              type="submit"
-              className="btn btn-primary w-100"
-              disabled={searchLoading}
-            >
+            <button type="submit" className="btn btn-primary w-100" disabled={searchLoading}>
               {searchLoading ? "Searching..." : "🔍 Search"}
             </button>
           </div>
         </form>
 
-        {/* Search Results */}
         {searchResults && searchResults.length > 0 && (
           <div className="table-responsive mt-3">
             <table className="table table-sm table-hover">
               <thead className="table-dark">
-                <tr>
-                  <th>Reg No</th>
-                  <th>Name</th>
-                  <th>Father</th>
-                  <th>Mobile</th>
-                  <th>Time</th>
-                  <th>Select</th>
-                </tr>
+                <tr><th>Reg No</th><th>Name</th><th>Father</th><th>Mobile</th><th>Time</th><th>Select</th></tr>
               </thead>
               <tbody>
                 {searchResults.map((s) => (
@@ -156,16 +124,9 @@ function StudentFeeStatus() {
                     <td>{s.name}</td>
                     <td>{s.fatherName || "-"}</td>
                     <td>{s.mobile}</td>
+                    <td>{s.inTime && s.outTime ? `${s.inTime} - ${s.outTime}` : "—"}</td>
                     <td>
-                      {s.inTime && s.outTime
-                        ? `${s.inTime} - ${s.outTime}`
-                        : "—"}
-                    </td>
-                    <td>
-                      <button
-                        className="btn btn-sm btn-success"
-                        onClick={() => handleSelectStudent(s)}
-                      >
+                      <button className="btn btn-sm btn-success" onClick={() => handleSelectStudent(s)}>
                         ✅ Select
                       </button>
                     </td>
@@ -179,11 +140,9 @@ function StudentFeeStatus() {
 
       {loading && <div className="text-muted">⏳ Loading fee history...</div>}
 
-      {/* ─── STUDENT INFO CARD ───────────────── */}
       {data && (
         <div>
-          {/* Summary Card */}
-          <div className="card shadow-sm border-0 mb-4 col-lg-8">
+          <div className="card shadow-sm border-0 mb-4 col-lg-10">
             <div className="card-body">
               <div className="d-flex justify-content-between align-items-start">
                 <div>
@@ -192,17 +151,12 @@ function StudentFeeStatus() {
                     {data.gender} &nbsp;|&nbsp; 📱 {data.mobile}
                   </p>
                 </div>
-                <button
-                  className="btn btn-sm btn-outline-secondary"
-                  onClick={handleReset}
-                >
-                  🔄 Search Again
-                </button>
+                <button className="btn btn-sm btn-outline-secondary" onClick={handleReset}>🔄 Search Again</button>
               </div>
 
               <hr />
 
-              {/* Info Row */}
+              {/* Info row (4 cards) */}
               <div className="row g-3 text-center">
                 <div className="col-md-3">
                   <div className="border rounded p-2">
@@ -213,9 +167,7 @@ function StudentFeeStatus() {
                 <div className="col-md-3">
                   <div className="border rounded p-2">
                     <div className="text-muted small">Seat No</div>
-                    <div className="fw-bold fs-5">
-                      {data.seatNo ? `🪑 ${data.seatNo}` : "—"}
-                    </div>
+                    <div className="fw-bold fs-5">{data.seatNo ? `🪑 ${data.seatNo}` : "—"}</div>
                   </div>
                 </div>
                 <div className="col-md-3">
@@ -227,49 +179,43 @@ function StudentFeeStatus() {
                 <div className="col-md-3">
                   <div className="border rounded p-2">
                     <div className="text-muted small">Student Status</div>
-                    <div className="fw-bold">
-                      {data.isActive ? "✅ Active" : "❌ Inactive"}
-                    </div>
+                    <div className="fw-bold">{data.isActive ? "✅ Active" : "❌ Inactive"}</div>
                   </div>
                 </div>
               </div>
 
               <hr />
 
-              {/* Fee Summary Row */}
-              <div className="row g-3 text-center">
-                <div className="col-md-3">
+              {/* Fee summary row (5 cards) */}
+              <div className="row g-2 text-center">
+                <div className="col-md col-6">
                   <div className="border rounded p-2">
-                    <div className="text-muted small">Total Months</div>
-                    <div className="fw-bold fs-5">{data.totalMonths}</div>
+                    <div className="text-muted small">Joining Date</div>
+                    <div className="fw-bold">{formatDate(data.dateOfAdmission)}</div>
                   </div>
                 </div>
-                <div className="col-md-3">
+                <div className="col-md col-6">
                   <div className="border rounded p-2 bg-light">
                     <div className="text-muted small">Total Fee</div>
                     <div className="fw-bold fs-5">₹{data.totalFee}</div>
                   </div>
                 </div>
-                <div className="col-md-3">
-                  <div
-                    className="border rounded p-2"
-                    style={{ background: "#d1fae5" }}
-                  >
-                    <div className="text-muted small">Total Paid</div>
-                    <div className="fw-bold fs-5 text-success">
-                      ₹{data.totalPaid}
-                    </div>
+                <div className="col-md col-6">
+                  <div className="border rounded p-2" style={{ background: "#fef3c7" }}>
+                    <div className="text-muted small">Discount</div>
+                    <div className="fw-bold fs-5 text-warning">₹{data.monthlyDiscount || 0}</div>
                   </div>
                 </div>
-                <div className="col-md-3">
-                  <div
-                    className="border rounded p-2"
-                    style={{ background: "#fee2e2" }}
-                  >
+                <div className="col-md col-6">
+                  <div className="border rounded p-2" style={{ background: "#d1fae5" }}>
+                    <div className="text-muted small">Total Paid</div>
+                    <div className="fw-bold fs-5 text-success">₹{data.totalPaid}</div>
+                  </div>
+                </div>
+                <div className="col-md col-6">
+                  <div className="border rounded p-2" style={{ background: "#fee2e2" }}>
                     <div className="text-muted small">Balance</div>
-                    <div className="fw-bold fs-5 text-danger">
-                      ₹{data.totalBalance}
-                    </div>
+                    <div className="fw-bold fs-5 text-danger">₹{data.totalBalance}</div>
                   </div>
                 </div>
               </div>
@@ -280,15 +226,16 @@ function StudentFeeStatus() {
             </div>
           </div>
 
-          {/* ─── FEE HISTORY TABLE ───────────── */}
+          {/* Monthly records */}
           {data.monthlyRecords && data.monthlyRecords.length > 0 ? (
-            <div className="table-responsive col-lg-8">
+            <div className="table-responsive col-lg-10">
               <table className="table table-custom table-hover">
                 <thead>
                   <tr>
-                    <th>Month</th>
+                    <th>Date</th>
                     <th>Slot</th>
                     <th>Monthly Fee</th>
+                    <th>Discount</th>
                     <th>Admission Fee</th>
                     <th>Final Fee</th>
                     <th>Paid</th>
@@ -299,35 +246,20 @@ function StudentFeeStatus() {
                 </thead>
                 <tbody>
                   {data.monthlyRecords.map((r, i) => (
-                    <tr
-                      key={i}
-                      className={
-                        r.paymentStatus === "PAID"
-                          ? "table-success"
-                          : r.paymentStatus === "PARTIAL"
-                            ? "table-warning"
-                            : ""
-                      }
-                    >
-                      <td className="fw-bold">
-                        {r.feeMonth}/{r.feeYear}
-                      </td>
-                      <td>
-                        {r.inTime} - {r.outTime}
-                      </td>
+                    <tr key={i} className={
+                      r.paymentStatus === "PAID" ? "table-success" :
+                      r.paymentStatus === "PARTIAL" ? "table-warning" : ""
+                    }>
+                      <td className="fw-bold">{formatDate(r.joiningDateInMonth)}</td>
+                      <td>{r.inTime} - {r.outTime}</td>
                       <td>₹{r.monthlyFee}</td>
+                      <td>{r.discountAmount > 0 ? `₹${r.discountAmount}` : "—"}</td>
                       <td>{r.admissionFee > 0 ? `₹${r.admissionFee}` : "—"}</td>
                       <td className="fw-bold">₹{r.finalFee}</td>
                       <td className="text-success">₹{r.paidAmount}</td>
-                      <td className="text-danger fw-bold">
-                        ₹{r.balanceAmount}
-                      </td>
+                      <td className="text-danger fw-bold">₹{r.balanceAmount}</td>
                       <td>{statusBadge(r.paymentStatus)}</td>
-                      <td>
-                        <small className="text-muted">
-                          {r.receiptNumber || "—"}
-                        </small>
-                      </td>
+                      <td><small className="text-muted">{r.receiptNumber || "—"}</small></td>
                     </tr>
                   ))}
                 </tbody>
