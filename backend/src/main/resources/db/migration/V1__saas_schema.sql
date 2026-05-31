@@ -96,7 +96,8 @@ CREATE TABLE users (
     role        VARCHAR(32)  NOT NULL DEFAULT 'OWNER',
     is_active   BOOLEAN      NOT NULL DEFAULT TRUE,
     created_at  TIMESTAMP    NOT NULL DEFAULT NOW(),
-    CONSTRAINT uk_users_tenant_username UNIQUE (tenant_id, username)
+     -- Username is globally unique because it can be used as a login identifier on its own.
+    CONSTRAINT uk_users_username UNIQUE (username)
 );
 CREATE INDEX idx_users_tenant ON users(tenant_id);
 
