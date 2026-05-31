@@ -11,6 +11,7 @@ import { toast } from "react-toastify";
 import AdvancePaymentModal from "../components/AdvancePaymentModal";
 import ReviseFeeModal from "../components/ReviseFeeModal";
 import WalletModal from "../components/WalletModal";
+import { useAuth } from "../context/AuthContext";
 
 // ── Date formatter: ISO "2026-05-01" → "01-May-2026" ──
 const formatDate = (iso) => {
@@ -28,6 +29,8 @@ const formatDate = (iso) => {
 };
 
 function FeePayment() {
+  const { libraryName } = useAuth();
+  const orgName = (libraryName || "LIBRARY").toUpperCase();
   const now = new Date();
 
   // STUDENT SEARCH
@@ -235,7 +238,7 @@ function FeePayment() {
       </head>
       <body>
         <div class="center">
-          <div class="org">MAA VIDYA LIBRARY</div>
+          <div class="org">${orgName}</div>
           <div class="sub">Fee Payment Receipt</div>
         </div>
         <div class="dash"></div>
