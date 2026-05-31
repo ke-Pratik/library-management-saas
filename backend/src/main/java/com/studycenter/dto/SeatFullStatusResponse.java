@@ -18,6 +18,12 @@ public class SeatFullStatusResponse {
     private int vacantSeats;
     private List<SeatDetail> seats;
 
+    /**
+     * Zone definitions for THIS tenant, used by the UI to render the legend,
+     * filter buttons, and seat color-mapping dynamically (no hardcoded ranges).
+     */
+    private List<ZoneDef> zones;
+
     @Data
     @NoArgsConstructor
     @AllArgsConstructor
@@ -39,5 +45,17 @@ public class SeatFullStatusResponse {
         private String studentName;
         private String gender;
         private String timeSlot;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class ZoneDef {
+        private String zoneName;       // e.g. BOYS_ONLY
+        private String allowedGender;  // Male | Female | null
+        private Integer startSeat;
+        private Integer endSeat;
+        private Integer displayOrder;
     }
 }
