@@ -1,76 +1,106 @@
-import { useEffect, useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import API from "../services/api";
 import { useAuth } from "../context/AuthContext";
 
-/**
- * Library owner onboarding form. Collects basic settings + explicit seat
- * zone layout. Each zone is a contiguous seat range with an optional gender
- * restriction. The backend validates ranges (in-bounds, non-overlapping).
- */
 function Onboarding() {
   const navigate = useNavigate();
   const { setOnboarded } = useAuth();
 
   const [form, setForm] = useState({
-    totalSeats: 65,
+    totalSeats: "65",
     operatingHoursStart: "08:00",
     operatingHoursEnd: "22:00",
     currencySymbol: "INR",
     timezone: "Asia/Kolkata",
   });
 
-  // Reasonable default zone layout for a 65-seat library.
   const [zones, setZones] = useState([
-    { zoneName: "BOYS_ONLY", allowedGender: "Male", startSeat: 1, endSeat: 17 },
-    { zoneName: "GIRLS_ONLY", allowedGender: "Female", startSeat: 18, endSeat: 30 },
-    { zoneName: "COMMON", allowedGender: "", startSeat: 31, endSeat: 65 },
+    { zoneName: "BOYS_ONLY",  allowedGender: "Male",   startSeat: "1",  endSeat: "17" },
+    { zoneName: "GIRLS_ONLY", allowedGender: "Female", startSeat: "18", endSeat: "30" },
+    { zoneName: "COMMON",     allowedGender: "",       startSeat: "31", endSeat: "65" },
   ]);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // Keep the last common-zone end-seat aligned with totalSeats if the user
-  // increases totalSeats and hasn't manually shifted the ranges.
-  useEffect(() => {
-    if (!zones.length) return;
-    const last = zones[zones.length - 1];
-    if (last.endSeat < form.totalSeats) {
-      setZones((prev) => {
-        const copy = [...prev];
-        copy[copy.length - 1] = { ...last, endSeat: form.totalSeats };
-        return copy;
-      });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.totalSeats]);
-
   const onChange = (e) => {
-    const { name, value, type } = e.target;
-    setForm({ ...form, [name]: type === "number" ? Number(value) : value });
+    const { name, value } = e.target;
+    setForm({ ...form, [name]: value });
   };
 
   const setZone = (i, patch) =>
     setZones((prev) => prev.map((z, idx) => (idx === i ? { ...z, ...patch } : z)));
 
   const addZone = () =>
-    setZones([...zones, { zoneName: "", allowedGender: "", startSeat: 1, endSeat: 1 }]);
+    setZones([...zones, { zoneName: "", allowedGender: "", startSeat: "", endSeat: "" }]);
 
   const removeZone = (i) => setZones(zones.filter((_, idx) => idx !== i));
 
+  const coverage = useMemo(() => {
+    const total = Number(form.totalSeats);
+    if (!Number.isFinite(total) || total < 1) return { ok: false, msg: "Enter a valid total seats" };
+
+    const parsed = zones.map((z, i) => ({
+      i,
+      name: z.zoneName?.trim(),
+      start: Number(z.startSeat),
+      end: Number(z.endSeat),
+    }));
+    if (parsed.some((p) => !p.name)) return { ok: false, msg: "Every zone needs a name" };
+    if (parsed.some((p) => !Number.isFinite(p.start) || !Number.isFinite(p.end))) {
+      return { ok: false, msg: "Every zone needs valid start and end seat numbers" };
+    }
+    if (parsed.some((p) => p.start < 1 || p.end < 1)) {
+      return { ok: false, msg: "Seat numbers must be 1 or greater" };
+    }
+    if (parsed.some((p) => p.start > p.end)) {
+      return { ok: false, msg: "A zone's start seat cannot be after its end seat" };
+    }
+    if (parsed.some((p) => p.end > total)) {
+      return { ok: false, msg: `A zone goes past total seats (${total}). Either raise total seats or shrink the zone.` };
+    }
+
+    const sorted = [...parsed].sort((a, b) => a.start - b.start);
+    if (sorted[0].start !== 1) {
+      return { ok: false, msg: `Zones must start from seat 1 (yours starts at ${sorted[0].start})` };
+    }
+    for (let i = 1; i < sorted.length; i++) {
+      if (sorted[i].start <= sorted[i - 1].end) {
+        return { ok: false, msg: `Overlap at seat ${sorted[i].start} (in two zones)` };
+      }
+      if (sorted[i].start !== sorted[i - 1].end + 1) {
+        return { ok: false, msg: `Gap at seat ${sorted[i - 1].end + 1} — not covered by any zone` };
+      }
+    }
+    if (sorted[sorted.length - 1].end !== total) {
+      return {
+        ok: false,
+        msg: `Zones cover up to seat ${sorted[sorted.length - 1].end}, but Total Seats is ${total}. They must match exactly.`,
+      };
+    }
+    return { ok: true, msg: `Zones cover seats 1..${total} exactly ✓` };
+  }, [form.totalSeats, zones]);
+
   const onSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
     setError("");
+    if (!coverage.ok) {
+      setError(coverage.msg);
+      return;
+    }
+    setLoading(true);
 
-    // Derive boolean flags from zone definitions for backward-compatibility
-    // with parts of the UI that still branch on hasBoysZone / hasGirlsZone / hasCommonZone.
-    const hasBoysZone = zones.some((z) => z.allowedGender === "Male");
-    const hasGirlsZone = zones.some((z) => z.allowedGender === "Female");
+    const hasBoysZone   = zones.some((z) => z.allowedGender === "Male");
+    const hasGirlsZone  = zones.some((z) => z.allowedGender === "Female");
     const hasCommonZone = zones.some((z) => !z.allowedGender);
 
     const payload = {
-      ...form,
+      totalSeats: Number(form.totalSeats),
+      operatingHoursStart: form.operatingHoursStart,
+      operatingHoursEnd: form.operatingHoursEnd,
+      currencySymbol: form.currencySymbol,
+      timezone: form.timezone,
       hasBoysZone,
       hasGirlsZone,
       hasCommonZone,
@@ -88,7 +118,11 @@ function Onboarding() {
       setOnboarded(true);
       navigate("/");
     } catch (err) {
-      setError(err.response?.data?.message || err.response?.data || "Failed to save onboarding");
+      setError(
+        err.response?.data?.message ||
+        (typeof err.response?.data === "string" ? err.response.data : null) ||
+        "Failed to save onboarding"
+      );
     } finally {
       setLoading(false);
     }
@@ -105,7 +139,6 @@ function Onboarding() {
           {error && <div className="alert alert-danger py-2 small">{String(error)}</div>}
 
           <form onSubmit={onSubmit}>
-            {/* --- basic settings --- */}
             <div className="row g-3">
               <div className="col-12 col-md-4">
                 <label className="form-label small fw-bold">Total seats</label>
@@ -134,7 +167,6 @@ function Onboarding() {
               </div>
             </div>
 
-            {/* --- zones --- */}
             <hr className="my-4" />
             <div className="d-flex justify-content-between align-items-center mb-2">
               <h6 className="mb-0">Seat zones</h6>
@@ -143,7 +175,8 @@ function Onboarding() {
               </button>
             </div>
             <p className="text-muted small mb-3">
-              Define non-overlapping seat ranges. Leave gender empty to allow any gender on those seats.
+              Define non-overlapping seat ranges. Together they must cover every seat from 1 to Total Seats.
+              Leave gender empty to allow any gender on those seats.
             </p>
 
             {zones.map((z, i) => (
@@ -165,15 +198,29 @@ function Onboarding() {
                 </div>
                 <div className="col-6 col-md-2">
                   <label className="form-label small">Start seat</label>
-                  <input type="number" min="1" className="form-control form-control-sm"
-                         value={z.startSeat}
-                         onChange={(e) => setZone(i, { startSeat: Number(e.target.value) })} required />
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min="1"
+                    className="form-control form-control-sm"
+                    value={z.startSeat}
+                    onChange={(e) => setZone(i, { startSeat: e.target.value })}
+                    onFocus={(e) => e.target.select()}
+                    required
+                  />
                 </div>
                 <div className="col-6 col-md-2">
                   <label className="form-label small">End seat</label>
-                  <input type="number" min="1" className="form-control form-control-sm"
-                         value={z.endSeat}
-                         onChange={(e) => setZone(i, { endSeat: Number(e.target.value) })} required />
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min="1"
+                    className="form-control form-control-sm"
+                    value={z.endSeat}
+                    onChange={(e) => setZone(i, { endSeat: e.target.value })}
+                    onFocus={(e) => e.target.select()}
+                    required
+                  />
                 </div>
                 <div className="col-6 col-md-3">
                   <button type="button" className="btn btn-sm btn-outline-danger w-100"
@@ -184,7 +231,15 @@ function Onboarding() {
               </div>
             ))}
 
-            <button type="submit" className="btn btn-primary w-100 fw-bold mt-4" disabled={loading}>
+            <div className={`alert py-2 small mt-3 mb-0 ${coverage.ok ? "alert-success" : "alert-warning"}`}>
+              {coverage.ok ? "✅ " : "⚠️ "}{coverage.msg}
+            </div>
+
+            <button
+              type="submit"
+              className="btn btn-primary w-100 fw-bold mt-4"
+              disabled={loading || !coverage.ok}
+            >
               {loading ? "Saving..." : "Finish setup"}
             </button>
           </form>
