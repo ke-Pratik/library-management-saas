@@ -36,6 +36,11 @@ public class AuthService {
         if (tenantRepository.findByOwnerEmail(r.getOwnerEmail()).isPresent()) {
             throw new RuntimeException("Email already registered");
         }
+        // Username is globally unique (used as a login identifier on its own)
+        if (userRepository.findByUsername(r.getUsername()).isPresent()) {
+            throw new RuntimeException(
+                    "Username '" + r.getUsername() + "' is already taken. Please pick another.");
+        }
 
         Tenant tenant = Tenant.builder()
                 .libraryName(r.getLibraryName())
@@ -48,14 +53,12 @@ public class AuthService {
                 .build();
         tenant = tenantRepository.save(tenant);
 
-        // Bind tenant on this thread so @PrePersist picks it up,
-        // and set GUC so RLS allows inserts into tenant_settings / users.
         TenantContext.setTenantId(tenant.getId());
         jdbc.execute("SET LOCAL app.current_tenant = '" + tenant.getId() + "'");
         try {
             TenantSettings settings = TenantSettings.builder()
                     .tenantId(tenant.getId())
-                    .currencySymbol("₹")
+                    .currencySymbol("INR")
                     .timezone("Asia/Kolkata")
                     .hasBoysZone(false)
                     .hasGirlsZone(false)
@@ -80,6 +83,7 @@ public class AuthService {
                     .tenantId(tenant.getId().toString())
                     .username(user.getUsername())
                     .role(user.getRole())
+                    .libraryName(tenant.getLibraryName())
                     .onboarded(false)
                     .build();
         } finally {
@@ -87,11 +91,33 @@ public class AuthService {
         }
     }
 
+    /**
+     * Login accepts EITHER a username OR an email in the `username` field.
+     * Heuristic: presence of '@' means email; otherwise username.
+     */
     @Transactional
     public LoginResponse login(LoginRequest r) {
-        // r.getUsername() is treated as ownerEmail
-        Tenant tenant = tenantRepository.findByOwnerEmail(r.getUsername())
-                .orElseThrow(() -> new RuntimeException("Invalid email or password"));
+        if (r.getUsername() == null || r.getUsername().isBlank()) {
+            throw new RuntimeException("Username or email is required");
+        }
+        String input = r.getUsername().trim();
+
+        User user;
+        Tenant tenant;
+
+        if (input.contains("@")) {
+            tenant = tenantRepository.findByOwnerEmail(input.toLowerCase())
+                    .orElseThrow(() -> new RuntimeException("Invalid credentials"));
+            jdbc.execute("SET LOCAL app.current_tenant = '" + tenant.getId() + "'");
+            user = userRepository.findFirstByTenantIdAndRole(tenant.getId(), "OWNER")
+                    .orElseThrow(() -> new RuntimeException("Invalid credentials"));
+        } else {
+            user = userRepository.findByUsername(input)
+                    .orElseThrow(() -> new RuntimeException("Invalid credentials"));
+            jdbc.execute("SET LOCAL app.current_tenant = '" + user.getTenantId() + "'");
+            tenant = tenantRepository.findById(user.getTenantId())
+                    .orElseThrow(() -> new RuntimeException("Invalid credentials"));
+        }
 
         if (Boolean.FALSE.equals(tenant.getIsActive())) {
             throw new RuntimeException("Account suspended. Contact administrator.");
@@ -100,17 +126,11 @@ public class AuthService {
                 && tenant.getSubscriptionUntil().isBefore(LocalDate.now())) {
             throw new RuntimeException("Subscription expired. Contact administrator.");
         }
-
-        // Bind GUC so RLS lets us read this tenant's users row.
-        jdbc.execute("SET LOCAL app.current_tenant = '" + tenant.getId() + "'");
-        User user = userRepository.findFirstByTenantIdAndRole(tenant.getId(), "OWNER")
-                .orElseThrow(() -> new RuntimeException("Invalid email or password"));
-
         if (!Boolean.TRUE.equals(user.getIsActive())) {
             throw new RuntimeException("Account is disabled.");
         }
         if (!passwordEncoder.matches(r.getPassword(), user.getPassword())) {
-            throw new RuntimeException("Invalid email or password");
+            throw new RuntimeException("Invalid credentials");
         }
 
         String token = jwtUtil.generateTenantToken(
@@ -121,6 +141,7 @@ public class AuthService {
                 .username(user.getUsername())
                 .role(user.getRole())
                 .tenantId(tenant.getId().toString())
+                .libraryName(tenant.getLibraryName())
                 .onboarded(Boolean.TRUE.equals(tenant.getOnboarded()))
                 .build();
     }
