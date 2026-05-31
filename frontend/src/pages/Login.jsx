@@ -18,12 +18,13 @@ function Login() {
     try {
       const response = await axios.post(
         `${import.meta.env.VITE_API_BASE_URL || "http://localhost:8080/api"}/auth/login`,
-        form // backend treats `username` as email
+        form
       );
       login(response.data.token, {
         username: response.data.username,
         role: response.data.role,
         tenantId: response.data.tenantId,
+        libraryName: response.data.libraryName,
         onboarded: response.data.onboarded,
       });
       navigate(response.data.onboarded ? "/" : "/onboarding");
@@ -31,7 +32,7 @@ function Login() {
       setError(
         err.response?.data?.message ||
         err.response?.data?.error   ||
-        "Invalid email or password"
+        "Invalid credentials"
       );
     } finally {
       setLoading(false);
@@ -44,12 +45,12 @@ function Login() {
         <div className="card-header text-white text-center py-4"
              style={{ background: "linear-gradient(135deg, #1a1a2e, #16213e)" }}>
           <FaBook size={36} className="mb-2" />
-          <h4 className="mb-0 fw-bold">Study Center</h4>
+          <h4 className="mb-0 fw-bold">Library Management</h4>
           <small className="opacity-75">Management System</small>
         </div>
 
         <div className="card-body p-4">
-          <h5 className="text-center mb-4 text-muted">Owner Login</h5>
+          <h5 className="text-center mb-4 text-muted">Login</h5>
 
           {error && (
             <div className="alert alert-danger py-2 text-center small">{error}</div>
@@ -57,16 +58,22 @@ function Login() {
 
           <form onSubmit={handleSubmit}>
             <div className="mb-3">
-              <label className="form-label fw-bold"><FaUser className="me-1" /> Email</label>
+              <label className="form-label fw-bold">
+                <FaUser className="me-1" /> Username or Email
+              </label>
               <input
-                type="email"
+                type="text"
                 className="form-control"
-                placeholder="owner@example.com"
+                placeholder="a1library  or  owner@example.com"
                 value={form.username}
                 onChange={(e) => setForm({ ...form, username: e.target.value })}
                 required
                 autoFocus
+                autoComplete="username"
               />
+              <small className="text-muted">
+                Owners can use either. Staff: use the username your owner shared.
+              </small>
             </div>
 
             <div className="mb-4">
@@ -78,6 +85,7 @@ function Login() {
                 value={form.password}
                 onChange={(e) => setForm({ ...form, password: e.target.value })}
                 required
+                autoComplete="current-password"
               />
             </div>
 
