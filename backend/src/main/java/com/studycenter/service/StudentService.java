@@ -37,6 +37,7 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 @Slf4j
+@Transactional(readOnly = true)
 public class StudentService {
 
     private final StudentRepository     studentRepository;

@@ -1,8 +1,13 @@
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, Navigate } from "react-router-dom";
 import { ToastContainer } from "react-toastify";
 
 import Login          from "./pages/Login";
+import PublicSignup   from "./pages/PublicSignup";
+import Onboarding     from "./pages/Onboarding";
+import SysadminLogin  from "./pages/SysadminLogin";
+import SysadminTenants from "./pages/SysadminTenants";
 import ProtectedRoute from "./components/ProtectedRoute";
+import { useAuth } from "./context/AuthContext";
 
 import Navbar         from "./components/Navbar";
 import Sidebar        from "./components/Sidebar";
@@ -22,7 +27,25 @@ import CollectionReport  from "./pages/CollectionReport";
 import BulkPayment       from "./pages/BulkPayment";
 import ReceiptSearch     from "./pages/ReceiptSearch";
 
-// Layout wrapping all protected pages
+function SysadminGuard({ children }) {
+  const t = localStorage.getItem("sysadmin_token");
+  if (!t) return <Navigate to="/sysadmin/login" replace />;
+  return children;
+}
+
+function OnboardingGuard({ children }) {
+  const { token, onboarded } = useAuth();
+  if (!token) return <Navigate to="/login" replace />;
+  if (onboarded) return <Navigate to="/" replace />;
+  return children;
+}
+
+function RequireOnboarded({ children }) {
+  const { onboarded } = useAuth();
+  if (!onboarded) return <Navigate to="/onboarding" replace />;
+  return children;
+}
+
 function AppLayout() {
   return (
     <div className="d-flex flex-column min-vh-100">
@@ -44,7 +67,7 @@ function AppLayout() {
             <Route path="/fees/student"      element={<StudentFeeStatus />} />
             <Route path="/fees/status"       element={<AllFeeStatus />} />
             <Route path="/fees/bulk-payment" element={<BulkPayment />} />
-            <Route path="/receipt-search" element={<ReceiptSearch />} />
+            <Route path="/receipt-search"    element={<ReceiptSearch />} />
             <Route path="/fees/collection"   element={<CollectionReport />} />
           </Routes>
         </main>
@@ -57,15 +80,24 @@ function AppLayout() {
 function App() {
   return (
     <Routes>
-      {/* Public route — no token needed */}
       <Route path="/login" element={<Login />} />
+      <Route path="/signup" element={<PublicSignup />} />
 
-      {/* All other routes protected by JWT */}
+      <Route path="/sysadmin/login" element={<SysadminLogin />} />
+      <Route path="/sysadmin/tenants" element={<SysadminGuard><SysadminTenants /></SysadminGuard>} />
+
+      <Route
+        path="/onboarding"
+        element={<OnboardingGuard><Onboarding /></OnboardingGuard>}
+      />
+
       <Route
         path="/*"
         element={
           <ProtectedRoute>
-            <AppLayout />
+            <RequireOnboarded>
+              <AppLayout />
+            </RequireOnboarded>
           </ProtectedRoute>
         }
       />

@@ -1,5 +1,6 @@
 package com.studycenter.entity;
 
+import com.studycenter.tenancy.TenantContext;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -8,6 +9,7 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalTime;
+import java.util.UUID;
 
 @Entity
 @Table(name = "fee_structure")
@@ -20,6 +22,9 @@ public class FeeStructure {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @Column(name = "tenant_id", nullable = false)
+    private UUID tenantId;
 
     @Column(name = "slot_name", nullable = false)
     private String slotName;
@@ -35,4 +40,11 @@ public class FeeStructure {
 
     @Column(name = "is_active")
     private Boolean isActive;
+
+    @PrePersist
+    void prePersist() {
+        if (tenantId == null && TenantContext.getTenantId() != null) {
+            tenantId = TenantContext.getTenantId();
+        }
+    }
 }

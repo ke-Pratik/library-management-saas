@@ -9,4 +9,6 @@ public class LoginResponse {
     private String token;
     private String username;
     private String role;
+    private String tenantId;
+    private Boolean onboarded;
 }

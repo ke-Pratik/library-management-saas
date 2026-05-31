@@ -32,11 +32,6 @@ public interface StudentRepository extends JpaRepository<Student, Long> {
     @Query("SELECT s FROM Student s WHERE s.isActive = true AND s.mobile LIKE CONCAT('%', :mobile, '%') ORDER BY s.name ASC")
     List<Student> searchActiveByMobile(@Param("mobile") String mobile);
 
-    // ═══════════════════════════════════════════════════════════════════
-    // Active students paginated WITH filters (server-side filtering)
-    //   feeStatusFilter: 'ALL' | 'PAID' | 'PARTIAL' | 'DUES'
-    //   genderFilter:    'ALL' | 'Male' | 'Female'
-    // ═══════════════════════════════════════════════════════════════════
     @Query(
         value = "SELECT * FROM ( " +
                 "  SELECT " +
@@ -112,9 +107,6 @@ public interface StudentRepository extends JpaRepository<Student, Long> {
             @Param("feeStatusFilter") String feeStatusFilter,
             Pageable pageable);
 
-    // ═══════════════════════════════════════════════════════════════════
-    // Aggregate counts for filter pills (Gender + Fee Status)
-    // ═══════════════════════════════════════════════════════════════════
     @Query(
         value = "SELECT " +
                 "  COUNT(*) AS total, " +

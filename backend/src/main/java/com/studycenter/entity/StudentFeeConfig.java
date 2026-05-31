@@ -1,5 +1,6 @@
 package com.studycenter.entity;
 
+import com.studycenter.tenancy.TenantContext;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -10,6 +11,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.UUID;
 
 @Entity
 @Table(name = "student_fee_config")
@@ -23,6 +25,9 @@ public class StudentFeeConfig {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "config_id")
     private Long configId;
+
+    @Column(name = "tenant_id", nullable = false)
+    private UUID tenantId;
 
     // Which student
     @Column(name = "reg_no", nullable = false)
@@ -54,4 +59,12 @@ public class StudentFeeConfig {
 
     @Column(name = "created_at")
     private LocalDateTime createdAt;
+
+    @PrePersist
+    void prePersist() {
+        if (tenantId == null && TenantContext.getTenantId() != null) {
+            tenantId = TenantContext.getTenantId();
+        }
+        if (createdAt == null) createdAt = LocalDateTime.now();
+    }
 }

@@ -1,34 +1,66 @@
 package com.studycenter.config;
 
+import com.studycenter.entity.TenantSeatZone;
+import com.studycenter.entity.TenantSettings;
+import com.studycenter.repository.TenantSeatZoneRepository;
+import com.studycenter.repository.TenantSettingsRepository;
+import com.studycenter.tenancy.TenantContext;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
+import java.util.UUID;
+
+/**
+ * Per-tenant seat layout resolver. Reads TenantSettings (total seats) and
+ * TenantSeatZones (zone ranges + gender rules) for the tenant bound to the
+ * current request via TenantContext.
+ *
+ * Public API is intentionally identical to the legacy single-tenant version
+ * so that existing services (SeatService, etc.) compile and behave the same.
+ *
+ * Caching: queries are cheap (small rows) and run within the request's
+ * @Transactional scope, so Postgres returns cached pages quickly. We don't
+ * add an in-memory cache for V1 to keep onboarding edits visible immediately.
+ */
 @Component
+@RequiredArgsConstructor
 public class SeatConfig {
 
-    private static final int TOTAL_SEATS = 65;
-    private static final int BOYS_START = 1;
-    private static final int BOYS_END = 17;
-    private static final int GIRLS_START = 18;
-    private static final int GIRLS_END = 30;
-    private static final int COMMON_START = 31;
-    private static final int COMMON_END = 65;
+    private final TenantSettingsRepository settingsRepository;
+    private final TenantSeatZoneRepository zoneRepository;
 
     public int getTotalSeats() {
-        return TOTAL_SEATS;
+        UUID tenantId = TenantContext.getTenantId();
+        if (tenantId == null) return 0;
+        return settingsRepository.findById(tenantId)
+                .map(TenantSettings::getTotalSeats)
+                .orElse(0);
     }
 
     public String getZoneLabel(int seatNo) {
-        if (seatNo >= BOYS_START && seatNo <= BOYS_END) return "BOYS_ONLY";
-        if (seatNo >= GIRLS_START && seatNo <= GIRLS_END) return "GIRLS_ONLY";
-        if (seatNo >= COMMON_START && seatNo <= COMMON_END) return "COMMON";
-        return "UNKNOWN";
+        return zonesForCurrentTenant().stream()
+                .filter(z -> seatNo >= z.getStartSeat() && seatNo <= z.getEndSeat())
+                .map(TenantSeatZone::getZoneName)
+                .findFirst()
+                .orElse("UNKNOWN");
     }
 
     public boolean isGenderAllowedOnSeat(int seatNo, String gender) {
-        String zone = getZoneLabel(seatNo);
-        if ("COMMON".equals(zone)) return true;
-        if ("BOYS_ONLY".equals(zone) && "Male".equalsIgnoreCase(gender)) return true;
-        if ("GIRLS_ONLY".equals(zone) && "Female".equalsIgnoreCase(gender)) return true;
-        return false;
+        return zonesForCurrentTenant().stream()
+                .filter(z -> seatNo >= z.getStartSeat() && seatNo <= z.getEndSeat())
+                .findFirst()
+                .map(z -> {
+                    String allowed = z.getAllowedGender();
+                    if (allowed == null || allowed.isBlank()) return true;       // any gender
+                    return allowed.equalsIgnoreCase(gender);
+                })
+                .orElse(false);   // seat number not in any defined zone
+    }
+
+    public List<TenantSeatZone> zonesForCurrentTenant() {
+        UUID tenantId = TenantContext.getTenantId();
+        if (tenantId == null) return List.of();
+        return zoneRepository.findByTenantIdOrderByDisplayOrderAsc(tenantId);
     }
 }

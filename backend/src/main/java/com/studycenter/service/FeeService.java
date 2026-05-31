@@ -60,6 +60,7 @@ import com.studycenter.repository.PaymentAllocationRepository;
 @Service
 @RequiredArgsConstructor
 @Slf4j
+@Transactional(readOnly = true)
 public class FeeService {
 
     private final FeeStructureRepository feeStructureRepository;

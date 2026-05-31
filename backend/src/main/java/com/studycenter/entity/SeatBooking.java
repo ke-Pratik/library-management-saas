@@ -1,5 +1,6 @@
 package com.studycenter.entity;
 
+import com.studycenter.tenancy.TenantContext;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -8,6 +9,7 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.UUID;
 
 @Entity
 @Table(name = "seat_bookings")
@@ -21,6 +23,9 @@ public class SeatBooking {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "booking_id")
     private Long bookingId;
+
+    @Column(name = "tenant_id", nullable = false)
+    private UUID tenantId;
 
     @Column(name = "seat_no", nullable = false)
     private int seatNo;
@@ -45,4 +50,11 @@ public class SeatBooking {
 
     @Column(name = "booking_date")
     private LocalDate bookingDate;
+
+    @PrePersist
+    void prePersist() {
+        if (tenantId == null && TenantContext.getTenantId() != null) {
+            tenantId = TenantContext.getTenantId();
+        }
+    }
 }

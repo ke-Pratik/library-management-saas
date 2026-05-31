@@ -1,9 +1,11 @@
 package com.studycenter.entity;
 
+import com.studycenter.tenancy.TenantContext;
 import jakarta.persistence.*;
 import lombok.*;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Entity
 @Table(name = "payment_allocations")
@@ -17,6 +19,9 @@ public class PaymentAllocation {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "allocation_id")
     private Long allocationId;
+
+    @Column(name = "tenant_id", nullable = false)
+    private UUID tenantId;
 
     @Column(name = "payment_id", nullable = false, length = 40)
     private String paymentId;
@@ -36,5 +41,8 @@ public class PaymentAllocation {
     @PrePersist
     void onCreate() {
         if (createdAt == null) createdAt = LocalDateTime.now();
+        if (tenantId == null && TenantContext.getTenantId() != null) {
+            tenantId = TenantContext.getTenantId();
+        }
     }
 }

@@ -94,4 +94,33 @@ export const refundWalletCash    = (regNo, data) => API.post(`/students/${regNo}
 export const getActiveConfig = (regNo) => API.get(`/fees/active-config/${regNo}`);
 export const getActiveStudentsFilterCounts = () => API.get("/students/active/counts");
 
+// ═══════════════════════════════════════════
+// SYSADMIN API (separate token)
+// ═══════════════════════════════════════════
+export const sysadminApi = axios.create({
+  baseURL: import.meta.env.VITE_API_BASE_URL || "http://localhost:8080/api",
+});
+
+sysadminApi.interceptors.request.use((config) => {
+  const token = localStorage.getItem("sysadmin_token");
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  // Rewrite "/tenants" → "/sysadmin/tenants" etc. since the controller is at /api/sysadmin
+  if (config.url && !config.url.startsWith("/sysadmin")) {
+    config.url = "/sysadmin" + config.url;
+  }
+  return config;
+});
+
+sysadminApi.interceptors.response.use(
+  (r) => r,
+  (err) => {
+    if (err.response?.status === 401) {
+      localStorage.removeItem("sysadmin_token");
+      localStorage.removeItem("sysadmin_username");
+      window.location.href = "/sysadmin/login";
+    }
+    return Promise.reject(err);
+  },
+);
+
 export default API;

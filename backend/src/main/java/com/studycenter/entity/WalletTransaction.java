@@ -1,9 +1,11 @@
 package com.studycenter.entity;
 
+import com.studycenter.tenancy.TenantContext;
 import jakarta.persistence.*;
 import lombok.*;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Entity
 @Table(name = "wallet_transactions")
@@ -17,6 +19,9 @@ public class WalletTransaction {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "tx_id")
     private Long txId;
+
+    @Column(name = "tenant_id", nullable = false)
+    private UUID tenantId;
 
     @Column(name = "reg_no", nullable = false)
     private Long regNo;
@@ -46,5 +51,8 @@ public class WalletTransaction {
     @PrePersist
     void onCreate() {
         if (createdAt == null) createdAt = LocalDateTime.now();
+        if (tenantId == null && TenantContext.getTenantId() != null) {
+            tenantId = TenantContext.getTenantId();
+        }
     }
 }

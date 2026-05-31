@@ -1,9 +1,11 @@
 package com.studycenter.entity;
 
+import com.studycenter.tenancy.TenantContext;
 import jakarta.persistence.*;
 import lombok.*;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Entity
 @Table(name = "fee_adjustments")
@@ -17,6 +19,9 @@ public class FeeAdjustment {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "adjustment_id")
     private Long adjustmentId;
+
+    @Column(name = "tenant_id", nullable = false)
+    private UUID tenantId;
 
     @Column(name = "fee_id", nullable = false)
     private Long feeId;
@@ -48,5 +53,8 @@ public class FeeAdjustment {
     @PrePersist
     void onCreate() {
         if (adjustedAt == null) adjustedAt = LocalDateTime.now();
+        if (tenantId == null && TenantContext.getTenantId() != null) {
+            tenantId = TenantContext.getTenantId();
+        }
     }
 }
