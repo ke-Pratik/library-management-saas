@@ -10,5 +10,6 @@ public class LoginResponse {
     private String username;
     private String role;
     private String tenantId;
+    private String libraryName;
     private Boolean onboarded;
 }
