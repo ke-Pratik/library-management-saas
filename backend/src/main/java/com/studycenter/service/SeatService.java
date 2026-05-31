@@ -41,7 +41,8 @@ public class SeatService {
         if (!start.isBefore(end))
             throw new InvalidRequestException("startTime must be before endTime");
     }
-      public SeatAvailabilityResponse checkSeatAvailability(int seatNo, String gender, LocalTime inTime, LocalTime outTime) {
+
+    public SeatAvailabilityResponse checkSeatAvailability(int seatNo, String gender, LocalTime inTime, LocalTime outTime) {
 
         validateTimeRange(inTime, outTime);
 
@@ -69,7 +70,7 @@ public class SeatService {
         if (!genderAllowed) message = "Seat " + seatNo + " (" + zone + ") not allowed for " + gender;
         else if (!isAvailable) message = "Seat " + seatNo + " is booked for overlapping time";
         else message = "Seat " + seatNo + " is AVAILABLE for " + inTime.format(TIME_FMT) + " - " + outTime.format(TIME_FMT);
-        
+
         String occupiedStudentName = null;
         Long occupiedRegNo = null;
 
@@ -106,34 +107,6 @@ public class SeatService {
                                 : null)
                 .build();
     }
-
-    /*public SeatAvailabilityResponse checkSeatAvailability(int seatNo, String gender, LocalTime inTime, LocalTime outTime) {
-
-        validateTimeRange(inTime, outTime);
-
-        if (seatNo < 1 || seatNo > seatConfig.getTotalSeats())
-            throw new InvalidRequestException("Seat must be between 1 and " + seatConfig.getTotalSeats());
-
-        String zone = seatConfig.getZoneLabel(seatNo);
-        boolean genderAllowed = seatConfig.isGenderAllowedOnSeat(seatNo, gender);
-        boolean isAvailable = !seatBookingRepository.existsBySeatNoAndStartTimeLessThanAndEndTimeGreaterThan(seatNo, outTime, inTime);
-
-        List<String> existingBookings = seatBookingRepository.findBySeatNo(seatNo).stream()
-                .map(b -> b.getStartTime().format(TIME_FMT) + " - " + b.getEndTime().format(TIME_FMT)
-                        + " (RegNo: " + b.getRegNo() + ")")
-                .toList();
-
-        String message;
-        if (!genderAllowed) message = "Seat " + seatNo + " (" + zone + ") not allowed for " + gender;
-        else if (!isAvailable) message = "Seat " + seatNo + " is booked for overlapping time";
-        else message = "Seat " + seatNo + " is AVAILABLE for " + inTime.format(TIME_FMT) + " - " + outTime.format(TIME_FMT);
-
-        return SeatAvailabilityResponse.builder()
-                .seatNo(seatNo).zone(zone).genderAllowed(genderAllowed)
-                .isAvailable(isAvailable && genderAllowed).message(message)
-                .existingBookings(existingBookings)
-                .build();
-    }*/
 
     public VacantSeatResponse getVacantSeats(String gender, LocalTime inTime, LocalTime outTime) {
 
@@ -185,11 +158,24 @@ public class SeatService {
                     .bookings(bookingInfos).build());
         }
 
+        // Include tenant-configured zone definitions so the UI can render
+        // legend, filters, and colors WITHOUT hardcoded ranges.
+        List<SeatFullStatusResponse.ZoneDef> zoneDefs = seatConfig.zonesForCurrentTenant().stream()
+                .map(z -> SeatFullStatusResponse.ZoneDef.builder()
+                        .zoneName(z.getZoneName())
+                        .allowedGender(z.getAllowedGender())
+                        .startSeat(z.getStartSeat())
+                        .endSeat(z.getEndSeat())
+                        .displayOrder(z.getDisplayOrder())
+                        .build())
+                .toList();
+
         return SeatFullStatusResponse.builder()
                 .totalSeats(seatConfig.getTotalSeats())
                 .occupiedSeats(occupied)
                 .vacantSeats(seatConfig.getTotalSeats() - occupied)
                 .seats(seats)
+                .zones(zoneDefs)
                 .build();
     }
 
@@ -290,26 +276,27 @@ public class SeatService {
                 .bookings(details)
                 .build();
     }
-    public Object getSeatAvailability(
-        String gender,
-        LocalTime inTime,
-        LocalTime outTime,
-        Integer seatNo) {
 
-    // If seatNo given → specific seat check
-    if (seatNo != null) {
-        return checkSeatAvailability(
-                seatNo,
+    public Object getSeatAvailability(
+            String gender,
+            LocalTime inTime,
+            LocalTime outTime,
+            Integer seatNo) {
+
+        // If seatNo given → specific seat check
+        if (seatNo != null) {
+            return checkSeatAvailability(
+                    seatNo,
+                    gender,
+                    inTime,
+                    outTime
+            );
+        }
+        // Otherwise → all vacant seats
+        return getVacantSeats(
                 gender,
                 inTime,
                 outTime
         );
     }
-    // Otherwise → all vacant seats
-    return getVacantSeats(
-            gender,
-            inTime,
-            outTime
-    );
-}
 }

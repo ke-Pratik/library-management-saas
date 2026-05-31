@@ -1,6 +1,30 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { getSeatStatus, cancelBooking } from "../services/api";
 import { toast } from "react-toastify";
+
+/**
+ * Seat Status Dashboard.
+ * Zones, ranges, and colors are derived from the tenant's configured
+ * `tenant_seat_zones` (returned by the backend in seatData.zones) — no
+ * hardcoded ranges like Boys 1-17 / Girls 18-30 / Common 31-65.
+ */
+
+// Color palette. We pick a color per zone based on its allowedGender, falling
+// back to a rotating palette for custom zones beyond the standard three.
+const COLOR_MALE = "#0d6efd";    // blue
+const COLOR_FEMALE = "#e91e8c";  // pink
+const COLOR_ANY = "#198754";     // green (common)
+const COLOR_OCCUPIED = "#dc3545"; // red
+const FALLBACK_PALETTE = ["#6610f2", "#fd7e14", "#20c997", "#0dcaf0", "#6f42c1"];
+
+function colorForZone(zone, fallbackIndex = 0) {
+  if (!zone) return COLOR_ANY;
+  const g = zone.allowedGender;
+  if (g === "Male") return COLOR_MALE;
+  if (g === "Female") return COLOR_FEMALE;
+  if (g === null || g === undefined || g === "") return COLOR_ANY;
+  return FALLBACK_PALETTE[fallbackIndex % FALLBACK_PALETTE.length];
+}
 
 function SeatStatus() {
   const [seatData, setSeatData] = useState(null);
@@ -38,11 +62,19 @@ function SeatStatus() {
     }
   };
 
-  const getZoneColor = (zone, status) => {
-    if (status === "OCCUPIED") return "#dc3545";
-    if (zone === "BOYS_ONLY") return "#0d6efd";
-    if (zone === "GIRLS_ONLY") return "#e91e8c";
-    return "#198754";
+  // Build a zoneName → color mapping from the tenant's zones, computed once per data load.
+  const zoneColorMap = useMemo(() => {
+    const map = {};
+    const zones = seatData?.zones || [];
+    zones.forEach((z, idx) => {
+      map[z.zoneName] = colorForZone(z, idx);
+    });
+    return map;
+  }, [seatData?.zones]);
+
+  const getSeatColor = (seat) => {
+    if (seat.status === "OCCUPIED") return COLOR_OCCUPIED;
+    return zoneColorMap[seat.zone] || COLOR_ANY;
   };
 
   const filteredSeats = seatData?.seats?.filter((s) => {
@@ -58,6 +90,8 @@ function SeatStatus() {
     );
   if (!seatData)
     return <div className="alert alert-danger">Failed to load seat data</div>;
+
+  const zones = seatData.zones || [];
 
   return (
     <div>
@@ -91,47 +125,59 @@ function SeatStatus() {
         </div>
       </div>
 
-      {/* Legend — corrected ranges */}
+      {/* Legend — built dynamically from tenant zone config */}
       <div className="d-flex gap-3 mb-3 flex-wrap">
-        {[
-          { color: "#0d6efd", label: "Boys Zone (1–17)" },
-          { color: "#e91e8c", label: "Girls Zone (18–30)" },
-          { color: "#198754", label: "Common Zone (31–65)" },
-          { color: "#dc3545", label: "Occupied" },
-        ].map(({ color, label }) => (
-          <span key={label}>
+        {zones.map((z, idx) => (
+          <span key={z.zoneName}>
             <span
               style={{
                 display: "inline-block",
                 width: 16,
                 height: 16,
-                backgroundColor: color,
+                backgroundColor: colorForZone(z, idx),
                 borderRadius: 3,
                 marginRight: 5,
               }}
             />
-            {label}
+            {z.zoneName} ({z.startSeat}–{z.endSeat})
           </span>
         ))}
+        <span>
+          <span
+            style={{
+              display: "inline-block",
+              width: 16,
+              height: 16,
+              backgroundColor: COLOR_OCCUPIED,
+              borderRadius: 3,
+              marginRight: 5,
+            }}
+          />
+          Occupied
+        </span>
       </div>
 
-      {/* Zone filter */}
+      {/* Zone filter — built dynamically from tenant zone config */}
       <div className="d-flex gap-2 mb-3 flex-wrap">
-        {[
-          { key: "ALL", label: "All Seats" },
-          { key: "BOYS_ONLY", label: "Boys (1–17)" },
-          { key: "GIRLS_ONLY", label: "Girls (18–30)" },
-          { key: "COMMON", label: "Common (31–65)" },
-        ].map(({ key, label }) => (
+        <button
+          className={`btn btn-sm ${zoneFilter === "ALL" ? "btn-dark" : "btn-outline-secondary"}`}
+          onClick={() => {
+            setZoneFilter("ALL");
+            setSelectedSeat(null);
+          }}
+        >
+          All Seats
+        </button>
+        {zones.map((z) => (
           <button
-            key={key}
-            className={`btn btn-sm ${zoneFilter === key ? "btn-dark" : "btn-outline-secondary"}`}
+            key={z.zoneName}
+            className={`btn btn-sm ${zoneFilter === z.zoneName ? "btn-dark" : "btn-outline-secondary"}`}
             onClick={() => {
-              setZoneFilter(key);
+              setZoneFilter(z.zoneName);
               setSelectedSeat(null);
             }}
           >
-            {label}
+            {z.zoneName} ({z.startSeat}–{z.endSeat})
           </button>
         ))}
       </div>
@@ -146,7 +192,7 @@ function SeatStatus() {
               style={{
                 width: 52,
                 height: 52,
-                backgroundColor: getZoneColor(seat.zone, seat.status),
+                backgroundColor: getSeatColor(seat),
                 color: "white",
                 borderRadius: 8,
                 display: "flex",

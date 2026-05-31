@@ -10,5 +10,6 @@ public class SignupResponse {
     private String tenantId;
     private String username;
     private String role;
+    private String libraryName;
     private Boolean onboarded;
 }

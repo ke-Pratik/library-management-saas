@@ -579,6 +579,7 @@ function StudentRegister() {
                 type="submit"
                 className="btn btn-primary px-4"
                 disabled={loading}
+                style={{ minWidth: 200 }}
               >
                 {loading ? (
                   <>
