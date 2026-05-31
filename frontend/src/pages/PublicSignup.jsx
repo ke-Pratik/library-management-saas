@@ -32,6 +32,7 @@ function PublicSignup() {
         username: res.data.username,
         role: res.data.role,
         tenantId: res.data.tenantId,
+        libraryName: res.data.libraryName,
         onboarded: res.data.onboarded,
       });
       navigate(res.data.onboarded ? "/" : "/onboarding");
