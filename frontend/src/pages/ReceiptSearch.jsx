@@ -1,8 +1,11 @@
 import { useState } from "react";
 import { getReceipt } from "../services/api";
 import { toast } from "react-toastify";
+import { useAuth } from "../context/AuthContext";
 
 function ReceiptSearch() {
+  const { libraryName } = useAuth();
+  const orgName = (libraryName || "LIBRARY").toUpperCase();
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [receipt, setReceipt] = useState(null);
@@ -54,7 +57,7 @@ function ReceiptSearch() {
       </head>
       <body>
         <div class="center">
-          <div class="org">MAA VIDYA LIBRARY</div>
+          <div class="org">${orgName}</div>
           <div class="sub">Fee Payment Receipt</div>
         </div>
         <div class="dash"></div>
