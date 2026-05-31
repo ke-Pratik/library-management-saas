@@ -41,7 +41,6 @@ public class OnboardingService {
         UUID tenantId = TenantContext.requireTenantId();
         validate(req);
 
-        // 1. Tenant settings
         TenantSettings s = tenantSettingsRepository.findById(tenantId)
                 .orElseGet(() -> TenantSettings.builder().tenantId(tenantId).build());
         s.setTotalSeats(req.getTotalSeats());
@@ -54,7 +53,6 @@ public class OnboardingService {
         if (req.getTimezone() != null) s.setTimezone(req.getTimezone());
         tenantSettingsRepository.save(s);
 
-        // 2. Replace zones (delete-then-insert keeps it simple for V1)
         tenantSeatZoneRepository.deleteByTenantId(tenantId);
         if (req.getZones() != null) {
             int idx = 0;
@@ -71,7 +69,6 @@ public class OnboardingService {
             }
         }
 
-        // 3. Mark tenant onboarded
         Tenant t = tenantRepository.findById(tenantId)
                 .orElseThrow(() -> new InvalidRequestException("Tenant not found"));
         t.setOnboarded(true);
@@ -103,12 +100,35 @@ public class OnboardingService {
             ranges.add(new int[]{z.getStartSeat(), z.getEndSeat(), 0});
         }
 
-        // overlap check
         ranges.sort(Comparator.comparingInt(a -> a[0]));
+
+        // Overlap check
         for (int i = 1; i < ranges.size(); i++) {
             if (ranges.get(i)[0] <= ranges.get(i - 1)[1]) {
-                throw new InvalidRequestException("Zone seat ranges overlap");
+                throw new InvalidRequestException(
+                        "Zone seat ranges overlap (seat " + ranges.get(i)[0] + " appears in two zones)");
             }
+        }
+
+        // Full-coverage check
+        if (ranges.get(0)[0] != 1) {
+            throw new InvalidRequestException(
+                    "Zones must start from seat 1. First zone starts at seat " + ranges.get(0)[0]);
+        }
+        for (int i = 1; i < ranges.size(); i++) {
+            int prevEnd = ranges.get(i - 1)[1];
+            int currStart = ranges.get(i)[0];
+            if (currStart != prevEnd + 1) {
+                throw new InvalidRequestException(
+                        "Gap between zones: seat " + (prevEnd + 1)
+                                + " is not covered by any zone (next zone starts at " + currStart + ")");
+            }
+        }
+        int lastEnd = ranges.get(ranges.size() - 1)[1];
+        if (lastEnd != total) {
+            throw new InvalidRequestException(
+                    "Zones cover up to seat " + lastEnd + " but totalSeats is " + total
+                            + ". Adjust the zones or change Total Seats so they match exactly.");
         }
     }
 
