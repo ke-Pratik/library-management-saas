@@ -2,10 +2,15 @@ import { useState } from "react";
 import { advancePayment } from "../services/api";
 import { toast } from "react-toastify";
 
+const todayIso = () => new Date().toISOString().split("T")[0];
+
 export default function AdvancePaymentModal({ student, onClose, onSaved }) {
   const [amount, setAmount]   = useState("");
   const [mode, setMode]       = useState("CASH");
-  const [months, setMonths]   = useState([{ month: new Date().getMonth() + 1, year: new Date().getFullYear() }]);
+  const [months, setMonths]   = useState([
+    { month: new Date().getMonth() + 1, year: new Date().getFullYear() },
+  ]);
+  const [paymentDate, setPaymentDate] = useState(todayIso());
   const [useWallet, setUseWallet] = useState(false);
   const [remarks, setRemarks] = useState("");
   const [saving, setSaving]   = useState(false);
@@ -29,6 +34,7 @@ export default function AdvancePaymentModal({ student, onClose, onSaved }) {
         totalAmount: parseFloat(amount),
         paymentMode: mode,
         months,
+        paymentDate: paymentDate || null,
         useWalletBalance: useWallet,
         remarks: remarks || null,
         adminUser: "admin",
@@ -61,11 +67,15 @@ export default function AdvancePaymentModal({ student, onClose, onSaved }) {
                   <p><strong>Wallet applied:</strong> Rs.{result.walletApplied}</p>
                   <p><strong>Excess → wallet:</strong> Rs.{result.walletCreditAdded}</p>
                   <table className="table table-sm table-bordered">
-                    <thead><tr><th>Month</th><th>Allocated</th><th>Balance</th><th>Status</th><th>Receipt</th></tr></thead>
+                    <thead>
+                      <tr>
+                        <th>Month</th><th>Allocated</th><th>Balance</th><th>Status</th><th>Receipt</th>
+                      </tr>
+                    </thead>
                     <tbody>
                       {result.allocations.map((a, i) => (
                         <tr key={i}>
-                          <td>{String(a.month).padStart(2,"0")}/{a.year}</td>
+                          <td>{String(a.month).padStart(2, "0")}/{a.year}</td>
                           <td>Rs.{a.amountAllocated}</td>
                           <td>Rs.{a.newBalance}</td>
                           <td><strong>{a.newStatus}</strong></td>
@@ -80,44 +90,83 @@ export default function AdvancePaymentModal({ student, onClose, onSaved }) {
                   <div className="row g-3">
                     <div className="col-md-6">
                       <label className="form-label fw-semibold">Total Amount (Rs) *</label>
-                      <input type="number" className="form-control" step="0.01" min="0.01" required
-                        value={amount} onChange={(e) => setAmount(e.target.value)} disabled={saving} />
+                      <input
+                        type="number" className="form-control" step="0.01" min="0.01" required
+                        value={amount} onChange={(e) => setAmount(e.target.value)} disabled={saving}
+                      />
                     </div>
-                    <div className="col-md-6">
+                    <div className="col-md-3">
                       <label className="form-label fw-semibold">Mode *</label>
-                      <select className="form-select" value={mode} onChange={(e) => setMode(e.target.value)} disabled={saving}>
+                      <select
+                        className="form-select" value={mode}
+                        onChange={(e) => setMode(e.target.value)} disabled={saving}
+                      >
                         <option value="CASH">CASH</option>
                         <option value="ONLINE">ONLINE</option>
                       </select>
+                    </div>
+                    <div className="col-md-3">
+                      <label className="form-label fw-semibold">Payment Date *</label>
+                      <input
+                        type="date" className="form-control"
+                        value={paymentDate} max={todayIso()}
+                        onChange={(e) => setPaymentDate(e.target.value)}
+                        disabled={saving} required
+                      />
                     </div>
                     <div className="col-12">
                       <label className="form-label fw-semibold">Months to allocate (oldest first)</label>
                       {months.map((m, i) => (
                         <div key={i} className="d-flex gap-2 mb-2">
-                          <select className="form-select" style={{ width: "120px" }}
+                          <select
+                            className="form-select" style={{ width: "120px" }}
                             value={m.month}
                             onChange={(e) => {
-                              const nm = [...months]; nm[i].month = parseInt(e.target.value); setMonths(nm);
-                            }} disabled={saving}>
-                            {Array.from({length:12}, (_,k) => <option key={k+1} value={k+1}>{String(k+1).padStart(2,"0")}</option>)}
+                              const nm = [...months];
+                              nm[i].month = parseInt(e.target.value);
+                              setMonths(nm);
+                            }}
+                            disabled={saving}
+                          >
+                            {Array.from({ length: 12 }, (_, k) =>
+                              <option key={k + 1} value={k + 1}>{String(k + 1).padStart(2, "0")}</option>
+                            )}
                           </select>
-                          <input type="number" className="form-control" style={{ width: "120px" }}
+                          <input
+                            type="number" className="form-control" style={{ width: "120px" }}
                             value={m.year} min="2020" max="2100"
-                            onChange={(e) => { const nm = [...months]; nm[i].year = parseInt(e.target.value); setMonths(nm); }}
-                            disabled={saving} />
+                            onChange={(e) => {
+                              const nm = [...months];
+                              nm[i].year = parseInt(e.target.value);
+                              setMonths(nm);
+                            }}
+                            disabled={saving}
+                          />
                           {months.length > 1 && (
-                            <button type="button" className="btn btn-sm btn-outline-danger"
-                              onClick={() => removeMonth(i)} disabled={saving}>✕</button>
+                            <button
+                              type="button" className="btn btn-sm btn-outline-danger"
+                              onClick={() => removeMonth(i)} disabled={saving}
+                            >
+                              ✕
+                            </button>
                           )}
                         </div>
                       ))}
-                      <button type="button" className="btn btn-sm btn-outline-primary"
-                        onClick={addMonth} disabled={saving}>+ Add Month</button>
+                      <button
+                        type="button" className="btn btn-sm btn-outline-primary"
+                        onClick={addMonth} disabled={saving}
+                      >
+                        + Add Month
+                      </button>
                     </div>
                     <div className="col-12">
                       <div className="form-check">
-                        <input type="checkbox" className="form-check-input" id="useWallet"
-                          checked={useWallet} onChange={(e) => setUseWallet(e.target.checked)} disabled={saving} />
+                        <input
+                          type="checkbox" className="form-check-input" id="useWallet"
+                          checked={useWallet}
+                          onChange={(e) => setUseWallet(e.target.checked)}
+                          disabled={saving}
+                        />
                         <label className="form-check-label" htmlFor="useWallet">
                           Apply wallet balance first
                         </label>
@@ -125,12 +174,18 @@ export default function AdvancePaymentModal({ student, onClose, onSaved }) {
                     </div>
                     <div className="col-12">
                       <label className="form-label fw-semibold">Remarks</label>
-                      <textarea className="form-control" rows={2}
-                        value={remarks} onChange={(e) => setRemarks(e.target.value)} disabled={saving} />
+                      <textarea
+                        className="form-control" rows={2}
+                        value={remarks} onChange={(e) => setRemarks(e.target.value)} disabled={saving}
+                      />
                     </div>
                   </div>
                   <button type="submit" className="btn btn-primary mt-3" disabled={saving}>
-                    {saving ? <><span className="spinner-border spinner-border-sm me-2" />Processing...</> : "💰 Record Payment"}
+                    {saving ? (
+                      <><span className="spinner-border spinner-border-sm me-2" />Processing...</>
+                    ) : (
+                      "💰 Record Payment"
+                    )}
                   </button>
                 </form>
               )}
