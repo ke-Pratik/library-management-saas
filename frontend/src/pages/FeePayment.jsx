@@ -28,6 +28,9 @@ const formatDate = (iso) => {
   }
 };
 
+// Today's date in YYYY-MM-DD for <input type="date"> max attribute
+const todayIso = () => new Date().toISOString().split("T")[0];
+
 function FeePayment() {
   const { libraryName } = useAuth();
   const orgName = (libraryName || "LIBRARY").toUpperCase();
@@ -46,13 +49,14 @@ function FeePayment() {
   const [feeData, setFeeData] = useState(null);
   const [feeLoading, setFeeLoading] = useState(false);
 
-  // PAYMENT FORM
+  // PAYMENT FORM — paymentDate added; defaults to today
   const [form, setForm] = useState({
     regNo: "",
     feeMonth: now.getMonth() + 1,
     feeYear: now.getFullYear(),
     payAmount: "",
     paymentMode: "CASH",
+    paymentDate: todayIso(),
     remarks: "",
   });
   const [payLoading, setPayLoading] = useState(false);
@@ -175,6 +179,7 @@ function FeePayment() {
         feeYear: Number(form.feeYear),
         payAmount: Number(form.payAmount),
         paymentMode: form.paymentMode,
+        paymentDate: form.paymentDate || null,
         remarks: form.remarks || null,
       };
       const res = await recordPayment(payload);
@@ -184,6 +189,7 @@ function FeePayment() {
       const updated = await getStudentFeeStatus(Number(form.regNo));
       setFeeData(updated.data);
 
+      // Keep paymentDate as-is (admin may be entering several payments for the same back-date)
       setForm((prev) => ({ ...prev, payAmount: "", remarks: "" }));
     } catch (err) {
       toast.error(err.response?.data?.message || "Payment failed");
@@ -303,7 +309,7 @@ function FeePayment() {
       </head>
       <body>
         <div class="center">
-          <div class="org">MAA VIDYA LIBRARY</div>
+          <div class="org">${orgName}</div>
           <div class="sub">Fee Payment Receipt</div>
         </div>
         <div class="dash"></div>
@@ -649,6 +655,20 @@ function FeePayment() {
               </select>
             </div>
             <div className="col-md-4">
+              <label className="form-label fw-bold">
+                Payment Date *
+                <span className="text-muted fw-normal ms-1">(defaults to today)</span>
+              </label>
+              <input
+                type="date"
+                className="form-control"
+                value={form.paymentDate}
+                max={todayIso()}
+                onChange={(e) => setForm({ ...form, paymentDate: e.target.value })}
+                required
+              />
+            </div>
+            <div className="col-md-8">
               <label className="form-label fw-bold">Remarks</label>
               <input
                 type="text" className="form-control"
