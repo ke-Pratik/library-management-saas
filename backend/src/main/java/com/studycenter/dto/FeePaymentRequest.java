@@ -5,6 +5,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import java.time.LocalDate;
 
 import java.math.BigDecimal;
 
@@ -30,4 +31,8 @@ public class FeePaymentRequest {
     private String paymentMode;
 
     private String remarks;
+
+    // Optional - if null backend uses LocalDate.now()
+    // Used by admins to record cash physically collected on a previous date.
+    private LocalDate paymentDate;
 }
