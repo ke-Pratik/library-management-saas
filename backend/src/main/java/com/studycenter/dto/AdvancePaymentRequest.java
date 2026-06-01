@@ -4,6 +4,7 @@ import jakarta.validation.constraints.*;
 import lombok.*;
 import java.math.BigDecimal;
 import java.util.List;
+import java.time.LocalDate;
 
 @Data @Builder @NoArgsConstructor @AllArgsConstructor
 public class AdvancePaymentRequest {
@@ -28,4 +29,7 @@ public class AdvancePaymentRequest {
         @Min(2020) @Max(2100)
         private int year;
     }
+    // Optional - if null backend uses LocalDate.now()
+    // Applies to every monthly allocation in this advance payment.
+    private LocalDate paymentDate;
 }
