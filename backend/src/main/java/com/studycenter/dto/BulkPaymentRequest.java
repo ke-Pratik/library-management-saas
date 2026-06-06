@@ -5,7 +5,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
+import java.time.LocalDate;
 import java.math.BigDecimal;
 import java.util.List;
 
@@ -38,4 +38,7 @@ public class BulkPaymentRequest {
         @NotNull
         private BigDecimal amount;  // can be partial or full balance
     }
+     // Optional - if null backend uses LocalDate.now()
+    // Applies to all payments in this bulk batch.
+    private LocalDate paymentDate;
 }

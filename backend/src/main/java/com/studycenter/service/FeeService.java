@@ -60,7 +60,6 @@ import com.studycenter.repository.PaymentAllocationRepository;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-@Transactional(readOnly = true)
 public class FeeService {
 
     private final FeeStructureRepository feeStructureRepository;
@@ -372,7 +371,7 @@ public class FeeService {
         record.setBalanceAmount(newBalance);
         record.setPaymentStatus(newStatus);
         record.setPaymentMode(mode);
-        record.setPaymentDate(LocalDate.now());
+        record.setPaymentDate(request.getPaymentDate() != null ? request.getPaymentDate() : LocalDate.now());
         record.setReceiptNumber(receipt);
         if (request.getRemarks() != null) record.setRemarks(request.getRemarks());
         feeRecordRepository.save(record);
@@ -383,7 +382,7 @@ public class FeeService {
                 .receiptNumber(receipt).feeMonth(record.getFeeMonth()).feeYear(record.getFeeYear())
                 .finalFee(record.getFinalFee()).amountPaidNow(payAmount).totalPaidSoFar(newPaid)
                 .balanceRemaining(newBalance).paymentStatus(newStatus).paymentMode(mode)
-                .paymentDate(LocalDate.now().toString()).build();
+                .paymentDate(record.getPaymentDate().toString()).build();
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -518,39 +517,58 @@ public class FeeService {
     // MONTHLY + DATE-RANGE COLLECTION (unchanged)
     // ═══════════════════════════════════════════════════════════════════
     public FeeCollectionResponse getMonthlyCollection(Integer month, Integer year) {
-        List<FeeRecord> records = feeRecordRepository.findByFeeMonthAndFeeYear(month, year);
-        return FeeCollectionResponse.builder()
-                .period(String.format("%02d/%d", month, year))
-                .totalStudents(records.size())
-                .paidCount((int) records.stream().filter(r -> "PAID".equals(r.getPaymentStatus())).count())
-                .pendingCount((int) records.stream().filter(r -> "PENDING".equals(r.getPaymentStatus())).count())
-                .partialCount((int) records.stream().filter(r -> "PARTIAL".equals(r.getPaymentStatus())).count())
-                .totalFeeExpected(feeRecordRepository.sumFinalFeeByMonth(month, year))
-                .totalCollected(feeRecordRepository.sumPaidAmountByMonth(month, year))
-                .totalBalance(feeRecordRepository.sumBalanceByMonth(month, year))
-                .cashCollected(feeRecordRepository.sumPaidAmountByMonthAndMode(month, year, "CASH"))
-                .onlineCollected(feeRecordRepository.sumPaidAmountByMonthAndMode(month, year, "ONLINE"))
-                .build();
-    }
+    List<FeeRecord> records = feeRecordRepository.findByFeeMonthAndFeeYear(month, year);
 
-    public FeeCollectionResponse getCollectionByDateRange(LocalDate startDate, LocalDate endDate) {
-        if (startDate.isAfter(endDate))
-            throw new InvalidRequestException("startDate must be before endDate");
-        List<FeeRecord> records = feeRecordRepository.findByPaymentDateBetween(startDate, endDate);
-        return FeeCollectionResponse.builder()
-                .period(startDate + " to " + endDate)
-                .totalStudents(records.size())
-                .paidCount((int) records.stream().filter(r -> "PAID".equals(r.getPaymentStatus())).count())
-                .pendingCount((int) records.stream().filter(r -> "PENDING".equals(r.getPaymentStatus())).count())
-                .partialCount((int) records.stream().filter(r -> "PARTIAL".equals(r.getPaymentStatus())).count())
-                .totalFeeExpected(feeRecordRepository.sumFinalFeeByDateRange(startDate, endDate))
-                .totalCollected(feeRecordRepository.sumPaidAmountByDateRange(startDate, endDate))
-                .totalBalance(feeRecordRepository.sumBalanceByDateRange(startDate, endDate))
-                .cashCollected(feeRecordRepository.sumPaidAmountByDateRangeAndMode(startDate, endDate, "CASH"))
-                .onlineCollected(feeRecordRepository.sumPaidAmountByDateRangeAndMode(startDate, endDate, "ONLINE"))
-                .build();
-    }
+    BigDecimal currentCollected  = feeRecordRepository.sumPaidAmountByMonth(month, year);
+    BigDecimal currentBalance    = feeRecordRepository.sumBalanceByMonth(month, year);
+    BigDecimal oldDuesRecovered  = feeRecordRepository.sumOldDuesRecoveredInMonth(month, year);
+    BigDecimal priorMonthDues    = feeRecordRepository.sumActiveOutstandingBeforeMonth(month, year);
+    BigDecimal totalCashReceived = currentCollected.add(oldDuesRecovered);
+    BigDecimal totalOutstanding  = currentBalance.add(priorMonthDues);
 
+    return FeeCollectionResponse.builder()
+            .period(String.format("%02d/%d", month, year))
+            .totalStudents(records.size())
+            .paidCount((int)    records.stream().filter(r -> "PAID".equals(r.getPaymentStatus())).count())
+            .pendingCount((int) records.stream().filter(r -> "PENDING".equals(r.getPaymentStatus())).count())
+            .partialCount((int) records.stream().filter(r -> "PARTIAL".equals(r.getPaymentStatus())).count())
+            .totalFeeExpected(feeRecordRepository.sumFinalFeeByMonth(month, year))
+            .totalCollected(currentCollected)
+            .totalBalance(currentBalance)
+            .cashCollected(feeRecordRepository.sumPaidAmountByMonthAndMode(month, year, "CASH"))
+            .onlineCollected(feeRecordRepository.sumPaidAmountByMonthAndMode(month, year, "ONLINE"))
+            .oldDuesRecovered(oldDuesRecovered)
+            .totalCashReceived(totalCashReceived)
+            .priorMonthDues(priorMonthDues)
+            .totalOutstandingDues(totalOutstanding)
+            .build();
+}
+
+public FeeCollectionResponse getCollectionByDateRange(LocalDate startDate, LocalDate endDate) {
+    if (startDate.isAfter(endDate))
+        throw new InvalidRequestException("startDate must be before endDate");
+
+    List<FeeRecord> records = feeRecordRepository.findByPaymentDateBetween(startDate, endDate);
+    BigDecimal totalCash = feeRecordRepository.sumPaidAmountByDateRange(startDate, endDate);
+
+    return FeeCollectionResponse.builder()
+            .period(startDate + " to " + endDate)
+            .totalStudents((int) records.stream().map(FeeRecord::getRegNo).distinct().count())
+            .paidCount((int)    records.stream().filter(r -> "PAID".equals(r.getPaymentStatus())).count())
+            .pendingCount(0)
+            .partialCount((int) records.stream().filter(r -> "PARTIAL".equals(r.getPaymentStatus())).count())
+            .totalFeeExpected(BigDecimal.ZERO)
+            .totalCollected(totalCash)
+            .totalBalance(BigDecimal.ZERO)
+            .cashCollected(feeRecordRepository.sumPaidAmountByDateRangeAndMode(startDate, endDate, "CASH"))
+            .onlineCollected(feeRecordRepository.sumPaidAmountByDateRangeAndMode(startDate, endDate, "ONLINE"))
+            .oldDuesRecovered(BigDecimal.ZERO)
+            .totalCashReceived(totalCash)
+            .priorMonthDues(BigDecimal.ZERO)
+            .totalOutstandingDues(BigDecimal.ZERO)
+            .build();
+}
+    
     // ═══════════════════════════════════════════════════════════════════
     // ENHANCEMENT #2: GENERATE ALL FEES FOR A MONTH (unchanged)
     // ═══════════════════════════════════════════════════════════════════
@@ -663,7 +681,7 @@ public class FeeService {
             record.setBalanceAmount(newBalance);
             record.setPaymentStatus(newStatus);
             record.setPaymentMode(mode);
-            record.setPaymentDate(LocalDate.now());
+            record.setPaymentDate(request.getPaymentDate() != null ? request.getPaymentDate() : LocalDate.now());
             record.setReceiptNumber(receipt);
             feeRecordRepository.save(record);
 
@@ -682,7 +700,7 @@ public class FeeService {
                 .feeMonth(request.getFeeMonth()).feeYear(request.getFeeYear())
                 .paymentMode(mode).totalStudents(results.size())
                 .totalAmountCollected(totalCollected)
-                .paymentDate(LocalDate.now().toString())
+                .paymentDate((request.getPaymentDate() != null ? request.getPaymentDate() : LocalDate.now()).toString())
                 .results(results).build();
     }
     // ── END ENHANCEMENT #5 ───────────────────────────────────────────────────

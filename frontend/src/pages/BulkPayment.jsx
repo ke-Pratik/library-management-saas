@@ -3,35 +3,27 @@ import { getAllFeeStatus, bulkPayment } from "../services/api";
 import { toast } from "react-toastify";
 
 const MONTH_NAMES = [
-  "January",
-  "February",
-  "March",
-  "April",
-  "May",
-  "June",
-  "July",
-  "August",
-  "September",
-  "October",
-  "November",
-  "December",
+  "January","February","March","April","May","June",
+  "July","August","September","October","November","December",
 ];
+
+const todayIso = () => new Date().toISOString().split("T")[0];
 
 function BulkPayment() {
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
   const [paymentMode, setPaymentMode] = useState("CASH");
+  const [paymentDate, setPaymentDate] = useState(todayIso());
 
-  const [students, setStudents] = useState([]); // [{regNo, studentName, timeSlot, balanceAmount, paymentStatus, ...}]
-  const [amounts, setAmounts] = useState({}); // { [regNo]: "amount string" }
-  const [selected, setSelected] = useState({}); // { [regNo]: bool }
+  const [students, setStudents] = useState([]);
+  const [amounts, setAmounts] = useState({});
+  const [selected, setSelected] = useState({});
 
   const [fetchLoading, setFetchLoading] = useState(false);
   const [submitLoading, setSubmitLoading] = useState(false);
   const [result, setResult] = useState(null);
 
-  // ── Fetch students with fee records for chosen month/year ──────────────────
   const handleFetch = async (e) => {
     e.preventDefault();
     setFetchLoading(true);
@@ -41,7 +33,6 @@ function BulkPayment() {
     setResult(null);
     try {
       const res = await getAllFeeStatus({ month, year });
-      // keep only students who have a fee record AND are not already fully PAID
       const eligible = (res.data.students || []).filter(
         (s) =>
           s.paymentStatus &&
@@ -53,12 +44,10 @@ function BulkPayment() {
       }
       setStudents(eligible);
 
-      // Pre-fill amounts with each student's full balance
       const initAmounts = {};
       const initSelected = {};
       eligible.forEach((s) => {
-        initAmounts[s.regNo] =
-          s.balanceAmount != null ? String(s.balanceAmount) : "";
+        initAmounts[s.regNo] = s.balanceAmount != null ? String(s.balanceAmount) : "";
         initSelected[s.regNo] = true;
       });
       setAmounts(initAmounts);
@@ -70,7 +59,6 @@ function BulkPayment() {
     }
   };
 
-  // ── Toggle select all ──────────────────────────────────────────────────────
   const allChecked =
     students.length > 0 && students.every((s) => selected[s.regNo]);
   const handleSelectAll = (e) => {
@@ -80,7 +68,6 @@ function BulkPayment() {
     setSelected(next);
   };
 
-  // ── Summary of selected rows ───────────────────────────────────────────────
   const summary = useMemo(() => {
     let count = 0;
     let total = 0;
@@ -94,7 +81,6 @@ function BulkPayment() {
     return { count, total };
   }, [students, selected, amounts]);
 
-  // ── Submit bulk payment ────────────────────────────────────────────────────
   const handleSubmit = async () => {
     const payments = students
       .filter((s) => selected[s.regNo])
@@ -109,7 +95,6 @@ function BulkPayment() {
       return;
     }
 
-    // Client-side over-payment guard
     for (const p of payments) {
       const student = students.find((s) => s.regNo === p.regNo);
       if (student && p.amount > Number(student.balanceAmount)) {
@@ -127,6 +112,7 @@ function BulkPayment() {
         feeMonth: Number(month),
         feeYear: Number(year),
         paymentMode,
+        paymentDate: paymentDate || null,
         payments,
       });
       setResult(res.data);
@@ -153,13 +139,12 @@ function BulkPayment() {
         payments are atomic — if any entry fails, nothing is saved.
       </p>
 
-      {/* ── Step 1: Choose month/year ──────────────────────────────────────── */}
-      <div className="form-section col-lg-7 mb-4">
+      <div className="form-section col-lg-9 mb-4">
         <h5 className="fw-bold mb-3">
-          Step 1: Select Month &amp; Payment Mode
+          Step 1: Select Month, Mode &amp; Date
         </h5>
         <form onSubmit={handleFetch} className="row g-3 align-items-end">
-          <div className="col-md-4">
+          <div className="col-md-3">
             <label className="form-label fw-bold">Month</label>
             <select
               className="form-select"
@@ -167,13 +152,11 @@ function BulkPayment() {
               onChange={(e) => setMonth(Number(e.target.value))}
             >
               {MONTH_NAMES.map((m, i) => (
-                <option key={i} value={i + 1}>
-                  {m}
-                </option>
+                <option key={i} value={i + 1}>{m}</option>
               ))}
             </select>
           </div>
-          <div className="col-md-3">
+          <div className="col-md-2">
             <label className="form-label fw-bold">Year</label>
             <input
               type="number"
@@ -182,8 +165,8 @@ function BulkPayment() {
               onChange={(e) => setYear(e.target.value)}
             />
           </div>
-          <div className="col-md-3">
-            <label className="form-label fw-bold">Payment Mode</label>
+          <div className="col-md-2">
+            <label className="form-label fw-bold">Mode</label>
             <select
               className="form-select"
               value={paymentMode}
@@ -192,6 +175,20 @@ function BulkPayment() {
               <option value="CASH">💵 Cash</option>
               <option value="ONLINE">💳 Online</option>
             </select>
+          </div>
+          <div className="col-md-3">
+            <label className="form-label fw-bold">
+              Payment Date
+              <span className="text-muted fw-normal ms-1">(applies to all)</span>
+            </label>
+            <input
+              type="date"
+              className="form-control"
+              value={paymentDate}
+              max={todayIso()}
+              onChange={(e) => setPaymentDate(e.target.value)}
+              required
+            />
           </div>
           <div className="col-md-2">
             <button
@@ -205,7 +202,6 @@ function BulkPayment() {
         </form>
       </div>
 
-      {/* ── Step 2: Student table with editable amounts ────────────────────── */}
       {students.length > 0 && (
         <div className="form-section mb-4">
           <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
@@ -213,7 +209,7 @@ function BulkPayment() {
               Step 2: Enter Amounts —{" "}
               <span className="text-muted fw-normal">
                 {MONTH_NAMES[month - 1]} {year} &nbsp;|&nbsp; {students.length}{" "}
-                student(s)
+                student(s) &nbsp;|&nbsp; {paymentDate}
               </span>
             </h5>
             <span className="badge bg-dark fs-6 px-3 py-2">
@@ -249,9 +245,7 @@ function BulkPayment() {
                 {students.map((s, i) => (
                   <tr
                     key={s.regNo}
-                    className={
-                      !selected[s.regNo] ? "text-muted opacity-50" : ""
-                    }
+                    className={!selected[s.regNo] ? "text-muted opacity-50" : ""}
                   >
                     <td>
                       <input
@@ -259,28 +253,17 @@ function BulkPayment() {
                         className="form-check-input"
                         checked={!!selected[s.regNo]}
                         onChange={(e) =>
-                          setSelected({
-                            ...selected,
-                            [s.regNo]: e.target.checked,
-                          })
+                          setSelected({ ...selected, [s.regNo]: e.target.checked })
                         }
                       />
                     </td>
                     <td>{i + 1}</td>
                     <td className="fw-bold">{s.regNo}</td>
                     <td>{s.studentName}</td>
-                    <td>
-                      <small>{s.timeSlot || "—"}</small>
-                    </td>
+                    <td><small>{s.timeSlot || "—"}</small></td>
                     <td>₹{s.finalFee}</td>
                     <td>₹{s.paidAmount}</td>
-                    <td
-                      className={
-                        Number(s.balanceAmount) > 0
-                          ? "fw-bold text-danger"
-                          : "text-success"
-                      }
-                    >
+                    <td className={Number(s.balanceAmount) > 0 ? "fw-bold text-danger" : "text-success"}>
                       ₹{s.balanceAmount}
                     </td>
                     <td>{statusBadge(s.paymentStatus)}</td>
@@ -304,7 +287,6 @@ function BulkPayment() {
             </table>
           </div>
 
-          {/* Submit bar */}
           <div className="d-flex align-items-center gap-3 mt-3 flex-wrap">
             <button
               className="btn btn-success px-5"
@@ -321,34 +303,21 @@ function BulkPayment() {
               )}
             </button>
             <small className="text-muted">
-              ⚠️ All entries are saved together. Any invalid entry rolls back
-              the entire batch.
+              ⚠️ All entries are saved together. Any invalid entry rolls back the entire batch.
             </small>
           </div>
         </div>
       )}
 
-      {/* ── Step 3: Result ────────────────────────────────────────────────── */}
       {result && (
         <div className="form-section mb-4">
           <div className="alert alert-success mb-3">
             <h5 className="fw-bold mb-1">✅ {result.message}</h5>
             <div className="d-flex gap-4 flex-wrap mt-2">
-              <span>
-                📅 Date: <strong>{result.paymentDate}</strong>
-              </span>
-              <span>
-                💳 Mode: <strong>{result.paymentMode}</strong>
-              </span>
-              <span>
-                👥 Students: <strong>{result.totalStudents}</strong>
-              </span>
-              <span>
-                💰 Total Collected:{" "}
-                <strong className="text-success">
-                  ₹{result.totalAmountCollected}
-                </strong>
-              </span>
+              <span>📅 Date: <strong>{result.paymentDate}</strong></span>
+              <span>💳 Mode: <strong>{result.paymentMode}</strong></span>
+              <span>👥 Students: <strong>{result.totalStudents}</strong></span>
+              <span>💰 Total Collected: <strong className="text-success">₹{result.totalAmountCollected}</strong></span>
             </div>
           </div>
 
@@ -356,13 +325,8 @@ function BulkPayment() {
             <table className="table table-sm table-custom table-hover">
               <thead>
                 <tr>
-                  <th>#</th>
-                  <th>Reg No</th>
-                  <th>Name</th>
-                  <th>Paid Now</th>
-                  <th>Balance Left</th>
-                  <th>Status</th>
-                  <th>Receipt No</th>
+                  <th>#</th><th>Reg No</th><th>Name</th><th>Paid Now</th>
+                  <th>Balance Left</th><th>Status</th><th>Receipt No</th>
                 </tr>
               </thead>
               <tbody>
@@ -372,13 +336,7 @@ function BulkPayment() {
                     <td className="fw-bold">{r.regNo}</td>
                     <td>{r.studentName}</td>
                     <td className="text-success fw-bold">₹{r.amountPaid}</td>
-                    <td
-                      className={
-                        Number(r.balanceRemaining) > 0
-                          ? "text-danger fw-bold"
-                          : "text-success"
-                      }
-                    >
+                    <td className={Number(r.balanceRemaining) > 0 ? "text-danger fw-bold" : "text-success"}>
                       ₹{r.balanceRemaining}
                     </td>
                     <td>{statusBadge(r.paymentStatus)}</td>
