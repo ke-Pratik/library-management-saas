@@ -60,7 +60,6 @@ import com.studycenter.repository.PaymentAllocationRepository;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-@Transactional(readOnly = true)
 public class FeeService {
 
     private final FeeStructureRepository feeStructureRepository;
@@ -335,9 +334,6 @@ public class FeeService {
     // ═══════════════════════════════════════════════════════════════════
     // RECORD PAYMENT
     // ═══════════════════════════════════════════════════════════════════
-        // ═══════════════════════════════════════════════════════════════════
-    // RECORD PAYMENT
-    // ═══════════════════════════════════════════════════════════════════
     @Transactional
     public FeePaymentResponse recordPayment(FeePaymentRequest request) {
         log.info("Payment: regNo={}, month={}/{}, amount={}",
@@ -346,14 +342,6 @@ public class FeeService {
         String mode = request.getPaymentMode().toUpperCase();
         if (!"CASH".equals(mode) && !"ONLINE".equals(mode))
             throw new InvalidRequestException("paymentMode must be CASH or ONLINE");
-
-        // Allow admin to backdate payment (cash collected on a previous day).
-        // Falls back to today if not provided. Future dates are rejected.
-        LocalDate effectivePaymentDate = request.getPaymentDate() != null
-                ? request.getPaymentDate()
-                : LocalDate.now();
-        if (effectivePaymentDate.isAfter(LocalDate.now()))
-            throw new InvalidRequestException("paymentDate cannot be in the future");
 
         Student student = studentRepository.findById(request.getRegNo())
                 .orElseThrow(() -> new StudentNotFoundException("Student " + request.getRegNo() + " not found."));
@@ -383,7 +371,7 @@ public class FeeService {
         record.setBalanceAmount(newBalance);
         record.setPaymentStatus(newStatus);
         record.setPaymentMode(mode);
-        record.setPaymentDate(effectivePaymentDate);
+        record.setPaymentDate(request.getPaymentDate() != null ? request.getPaymentDate() : LocalDate.now());
         record.setReceiptNumber(receipt);
         if (request.getRemarks() != null) record.setRemarks(request.getRemarks());
         feeRecordRepository.save(record);
@@ -394,11 +382,8 @@ public class FeeService {
                 .receiptNumber(receipt).feeMonth(record.getFeeMonth()).feeYear(record.getFeeYear())
                 .finalFee(record.getFinalFee()).amountPaidNow(payAmount).totalPaidSoFar(newPaid)
                 .balanceRemaining(newBalance).paymentStatus(newStatus).paymentMode(mode)
-                .paymentDate(effectivePaymentDate.toString()).build();
+                .paymentDate(record.getPaymentDate().toString()).build();
     }
-
-      
-   
 
     // ═══════════════════════════════════════════════════════════════════
     // STUDENT FEE STATUS
@@ -532,39 +517,58 @@ public class FeeService {
     // MONTHLY + DATE-RANGE COLLECTION (unchanged)
     // ═══════════════════════════════════════════════════════════════════
     public FeeCollectionResponse getMonthlyCollection(Integer month, Integer year) {
-        List<FeeRecord> records = feeRecordRepository.findByFeeMonthAndFeeYear(month, year);
-        return FeeCollectionResponse.builder()
-                .period(String.format("%02d/%d", month, year))
-                .totalStudents(records.size())
-                .paidCount((int) records.stream().filter(r -> "PAID".equals(r.getPaymentStatus())).count())
-                .pendingCount((int) records.stream().filter(r -> "PENDING".equals(r.getPaymentStatus())).count())
-                .partialCount((int) records.stream().filter(r -> "PARTIAL".equals(r.getPaymentStatus())).count())
-                .totalFeeExpected(feeRecordRepository.sumFinalFeeByMonth(month, year))
-                .totalCollected(feeRecordRepository.sumPaidAmountByMonth(month, year))
-                .totalBalance(feeRecordRepository.sumBalanceByMonth(month, year))
-                .cashCollected(feeRecordRepository.sumPaidAmountByMonthAndMode(month, year, "CASH"))
-                .onlineCollected(feeRecordRepository.sumPaidAmountByMonthAndMode(month, year, "ONLINE"))
-                .build();
-    }
+    List<FeeRecord> records = feeRecordRepository.findByFeeMonthAndFeeYear(month, year);
 
-    public FeeCollectionResponse getCollectionByDateRange(LocalDate startDate, LocalDate endDate) {
-        if (startDate.isAfter(endDate))
-            throw new InvalidRequestException("startDate must be before endDate");
-        List<FeeRecord> records = feeRecordRepository.findByPaymentDateBetween(startDate, endDate);
-        return FeeCollectionResponse.builder()
-                .period(startDate + " to " + endDate)
-                .totalStudents(records.size())
-                .paidCount((int) records.stream().filter(r -> "PAID".equals(r.getPaymentStatus())).count())
-                .pendingCount((int) records.stream().filter(r -> "PENDING".equals(r.getPaymentStatus())).count())
-                .partialCount((int) records.stream().filter(r -> "PARTIAL".equals(r.getPaymentStatus())).count())
-                .totalFeeExpected(feeRecordRepository.sumFinalFeeByDateRange(startDate, endDate))
-                .totalCollected(feeRecordRepository.sumPaidAmountByDateRange(startDate, endDate))
-                .totalBalance(feeRecordRepository.sumBalanceByDateRange(startDate, endDate))
-                .cashCollected(feeRecordRepository.sumPaidAmountByDateRangeAndMode(startDate, endDate, "CASH"))
-                .onlineCollected(feeRecordRepository.sumPaidAmountByDateRangeAndMode(startDate, endDate, "ONLINE"))
-                .build();
-    }
+    BigDecimal currentCollected  = feeRecordRepository.sumPaidAmountByMonth(month, year);
+    BigDecimal currentBalance    = feeRecordRepository.sumBalanceByMonth(month, year);
+    BigDecimal oldDuesRecovered  = feeRecordRepository.sumOldDuesRecoveredInMonth(month, year);
+    BigDecimal priorMonthDues    = feeRecordRepository.sumActiveOutstandingBeforeMonth(month, year);
+    BigDecimal totalCashReceived = currentCollected.add(oldDuesRecovered);
+    BigDecimal totalOutstanding  = currentBalance.add(priorMonthDues);
 
+    return FeeCollectionResponse.builder()
+            .period(String.format("%02d/%d", month, year))
+            .totalStudents(records.size())
+            .paidCount((int)    records.stream().filter(r -> "PAID".equals(r.getPaymentStatus())).count())
+            .pendingCount((int) records.stream().filter(r -> "PENDING".equals(r.getPaymentStatus())).count())
+            .partialCount((int) records.stream().filter(r -> "PARTIAL".equals(r.getPaymentStatus())).count())
+            .totalFeeExpected(feeRecordRepository.sumFinalFeeByMonth(month, year))
+            .totalCollected(currentCollected)
+            .totalBalance(currentBalance)
+            .cashCollected(feeRecordRepository.sumPaidAmountByMonthAndMode(month, year, "CASH"))
+            .onlineCollected(feeRecordRepository.sumPaidAmountByMonthAndMode(month, year, "ONLINE"))
+            .oldDuesRecovered(oldDuesRecovered)
+            .totalCashReceived(totalCashReceived)
+            .priorMonthDues(priorMonthDues)
+            .totalOutstandingDues(totalOutstanding)
+            .build();
+}
+
+public FeeCollectionResponse getCollectionByDateRange(LocalDate startDate, LocalDate endDate) {
+    if (startDate.isAfter(endDate))
+        throw new InvalidRequestException("startDate must be before endDate");
+
+    List<FeeRecord> records = feeRecordRepository.findByPaymentDateBetween(startDate, endDate);
+    BigDecimal totalCash = feeRecordRepository.sumPaidAmountByDateRange(startDate, endDate);
+
+    return FeeCollectionResponse.builder()
+            .period(startDate + " to " + endDate)
+            .totalStudents((int) records.stream().map(FeeRecord::getRegNo).distinct().count())
+            .paidCount((int)    records.stream().filter(r -> "PAID".equals(r.getPaymentStatus())).count())
+            .pendingCount(0)
+            .partialCount((int) records.stream().filter(r -> "PARTIAL".equals(r.getPaymentStatus())).count())
+            .totalFeeExpected(BigDecimal.ZERO)
+            .totalCollected(totalCash)
+            .totalBalance(BigDecimal.ZERO)
+            .cashCollected(feeRecordRepository.sumPaidAmountByDateRangeAndMode(startDate, endDate, "CASH"))
+            .onlineCollected(feeRecordRepository.sumPaidAmountByDateRangeAndMode(startDate, endDate, "ONLINE"))
+            .oldDuesRecovered(BigDecimal.ZERO)
+            .totalCashReceived(totalCash)
+            .priorMonthDues(BigDecimal.ZERO)
+            .totalOutstandingDues(BigDecimal.ZERO)
+            .build();
+}
+    
     // ═══════════════════════════════════════════════════════════════════
     // ENHANCEMENT #2: GENERATE ALL FEES FOR A MONTH (unchanged)
     // ═══════════════════════════════════════════════════════════════════
@@ -624,7 +628,7 @@ public class FeeService {
                 .noConfigRegNos(noConfigRegNos).message(message).build();
     }
 
-        // ═══════════════════════════════════════════════════════════════════
+    // ═══════════════════════════════════════════════════════════════════
     // ENHANCEMENT #5: BULK PAYMENT
     // Processes multiple payments in one @Transactional call.
     // If ANY student fails validation, entire batch rolls back.
@@ -641,14 +645,6 @@ public class FeeService {
 
         if (request.getPayments() == null || request.getPayments().isEmpty())
             throw new InvalidRequestException("Payment list cannot be empty");
-
-        // Single effective date applied to every payment in this bulk batch.
-        // Allows backdating; defaults to today; future dates rejected.
-        LocalDate effectivePaymentDate = request.getPaymentDate() != null
-                ? request.getPaymentDate()
-                : LocalDate.now();
-        if (effectivePaymentDate.isAfter(LocalDate.now()))
-            throw new InvalidRequestException("paymentDate cannot be in the future");
 
         List<BulkPaymentResponse.PaymentResult> results = new ArrayList<>();
         BigDecimal totalCollected = BigDecimal.ZERO;
@@ -685,7 +681,7 @@ public class FeeService {
             record.setBalanceAmount(newBalance);
             record.setPaymentStatus(newStatus);
             record.setPaymentMode(mode);
-            record.setPaymentDate(effectivePaymentDate);
+            record.setPaymentDate(request.getPaymentDate() != null ? request.getPaymentDate() : LocalDate.now());
             record.setReceiptNumber(receipt);
             feeRecordRepository.save(record);
 
@@ -704,7 +700,7 @@ public class FeeService {
                 .feeMonth(request.getFeeMonth()).feeYear(request.getFeeYear())
                 .paymentMode(mode).totalStudents(results.size())
                 .totalAmountCollected(totalCollected)
-                .paymentDate(effectivePaymentDate.toString())
+                .paymentDate((request.getPaymentDate() != null ? request.getPaymentDate() : LocalDate.now()).toString())
                 .results(results).build();
     }
     // ── END ENHANCEMENT #5 ───────────────────────────────────────────────────
@@ -1100,110 +1096,99 @@ return SlotChangeResponse.builder()
 }
 
     // ═══════════════════════════════════════════════════════════════════
-    // CASE 4 — ADVANCE PAYMENT (multi-month allocation)
-    // ═══════════════════════════════════════════════════════════════════
-    @Transactional
-    public AdvancePaymentResponse recordAdvancePayment(AdvancePaymentRequest req) {
+// CASE 4 — ADVANCE PAYMENT (multi-month allocation)
+// ═══════════════════════════════════════════════════════════════════
+@Transactional
+public AdvancePaymentResponse recordAdvancePayment(AdvancePaymentRequest req) {
 
-        log.info("Advance payment: regNo={}, total={}, months={}",
-            req.getRegNo(), req.getTotalAmount(), req.getMonths().size());
+    log.info("Advance payment: regNo={}, total={}, months={}",
+        req.getRegNo(), req.getTotalAmount(), req.getMonths().size());
 
-        String mode = req.getPaymentMode().toUpperCase();
-        if (!"CASH".equals(mode) && !"ONLINE".equals(mode))
-            throw new InvalidRequestException("paymentMode must be CASH or ONLINE");
+    String mode = req.getPaymentMode().toUpperCase();
+    if (!"CASH".equals(mode) && !"ONLINE".equals(mode))
+        throw new InvalidRequestException("paymentMode must be CASH or ONLINE");
 
-        // Single effective date stamped on every monthly allocation in this
-        // advance batch. Allows backdating; defaults to today; rejects future.
-        LocalDate effectivePaymentDate = req.getPaymentDate() != null
-                ? req.getPaymentDate()
-                : LocalDate.now();
-        if (effectivePaymentDate.isAfter(LocalDate.now()))
-            throw new InvalidRequestException("paymentDate cannot be in the future");
+    Student student = studentRepository.findById(req.getRegNo())
+        .orElseThrow(() -> new StudentNotFoundException("Student " + req.getRegNo() + " not found"));
 
-        Student student = studentRepository.findById(req.getRegNo())
-            .orElseThrow(() -> new StudentNotFoundException("Student " + req.getRegNo() + " not found"));
+    String adminUser = req.getAdminUser() != null ? req.getAdminUser() : "admin";
+    String paymentId = "PAY-" + System.currentTimeMillis();
+    BigDecimal totalAvailable = req.getTotalAmount();
+    BigDecimal walletApplied  = BigDecimal.ZERO;
 
-        String adminUser = req.getAdminUser() != null ? req.getAdminUser() : "admin";
-        String paymentId = "PAY-" + System.currentTimeMillis();
-        BigDecimal totalAvailable = req.getTotalAmount();
-        BigDecimal walletApplied  = BigDecimal.ZERO;
-
-        if (req.isUseWalletBalance()) {
-            BigDecimal wb = student.getWalletBalance();
-            if (wb.signum() > 0) {
-                walletApplied = wb.min(totalAvailable.add(BigDecimal.ZERO));   // safe defensive
-                // Actually wallet applies on TOP of cash; recompute below
-                walletApplied = wb;        // use full wallet
-                walletService.debit(req.getRegNo(), walletApplied,
-                    WalletService.TxType.DEBIT_APPLIED_TO_FEE, null,
-                    "Wallet applied to advance payment", adminUser);
-                totalAvailable = totalAvailable.add(walletApplied);
-            }
+    if (req.isUseWalletBalance()) {
+        BigDecimal wb = student.getWalletBalance();
+        if (wb.signum() > 0) {
+            walletApplied = wb.min(totalAvailable.add(BigDecimal.ZERO));   // safe defensive
+            // Actually wallet applies on TOP of cash; recompute below
+            walletApplied = wb;        // use full wallet
+            walletService.debit(req.getRegNo(), walletApplied,
+                WalletService.TxType.DEBIT_APPLIED_TO_FEE, null,
+                "Wallet applied to advance payment", adminUser);
+            totalAvailable = totalAvailable.add(walletApplied);
         }
-
-        BigDecimal remaining = totalAvailable;
-        List<AdvancePaymentResponse.Allocation> results = new ArrayList<>();
-
-        for (AdvancePaymentRequest.MonthSpec ms : req.getMonths()) {
-            if (remaining.signum() <= 0) break;
-
-            FeeRecord fr = feeRecordRepository
-                .findByRegNoAndFeeMonthAndFeeYear(req.getRegNo(), ms.getMonth(), ms.getYear())
-                .orElseGet(() -> autoGenerateFutureMonthRecord(req.getRegNo(), ms.getMonth(), ms.getYear()));
-
-            if ("PAID".equals(fr.getPaymentStatus())) continue;
-            if (fr.getBalanceAmount().signum() <= 0) continue;
-
-            BigDecimal toAllocate = remaining.min(fr.getBalanceAmount());
-            BigDecimal newPaid    = fr.getPaidAmount().add(toAllocate);
-            BigDecimal newBal     = fr.getFinalFee().subtract(newPaid);
-            if (newBal.signum() < 0) newBal = BigDecimal.ZERO;
-            String     newStatus  = determineStatus(newPaid, fr.getFinalFee());
-
-            String receipt = generateReceiptNumber(fr.getFeeMonth(), fr.getFeeYear());
-            fr.setPaidAmount(newPaid);
-            fr.setBalanceAmount(newBal);
-            fr.setPaymentStatus(newStatus);
-            fr.setPaymentMode(mode);
-            fr.setPaymentDate(effectivePaymentDate);
-            fr.setReceiptNumber(receipt);
-            if (req.getRemarks() != null) fr.setRemarks(req.getRemarks());
-            feeRecordRepository.save(fr);
-
-            paymentAllocationRepository.save(PaymentAllocation.builder()
-                .paymentId(paymentId).feeId(fr.getFeeId())
-                .allocatedAmount(toAllocate).receiptNumber(receipt)
-                .build());
-
-            results.add(AdvancePaymentResponse.Allocation.builder()
-                .feeId(fr.getFeeId()).month(fr.getFeeMonth()).year(fr.getFeeYear())
-                .amountAllocated(toAllocate).newBalance(newBal)
-                .newStatus(newStatus).receiptNumber(receipt)
-                .build());
-
-            remaining = remaining.subtract(toAllocate);
-        }
-
-        BigDecimal walletCreditAdded = BigDecimal.ZERO;
-        if (remaining.signum() > 0) {
-            walletCreditAdded = remaining;
-            walletService.credit(req.getRegNo(), walletCreditAdded,
-                WalletService.TxType.CREDIT_ADVANCE_PAYMENT, null,
-                "Excess advance payment", adminUser);
-        }
-
-        return AdvancePaymentResponse.builder()
-            .message("Advance payment processed across " + results.size() + " month(s)")
-            .paymentId(paymentId).regNo(req.getRegNo())
-            .totalReceived(req.getTotalAmount())
-            .walletApplied(walletApplied)
-            .walletCreditAdded(walletCreditAdded)
-            .allocations(results)
-            .build();
     }
 
+    BigDecimal remaining = totalAvailable;
+    List<AdvancePaymentResponse.Allocation> results = new ArrayList<>();
 
+    for (AdvancePaymentRequest.MonthSpec ms : req.getMonths()) {
+        if (remaining.signum() <= 0) break;
 
+        FeeRecord fr = feeRecordRepository
+            .findByRegNoAndFeeMonthAndFeeYear(req.getRegNo(), ms.getMonth(), ms.getYear())
+            .orElseGet(() -> autoGenerateFutureMonthRecord(req.getRegNo(), ms.getMonth(), ms.getYear()));
+
+        if ("PAID".equals(fr.getPaymentStatus())) continue;
+        if (fr.getBalanceAmount().signum() <= 0) continue;
+
+        BigDecimal toAllocate = remaining.min(fr.getBalanceAmount());
+        BigDecimal newPaid    = fr.getPaidAmount().add(toAllocate);
+        BigDecimal newBal     = fr.getFinalFee().subtract(newPaid);
+        if (newBal.signum() < 0) newBal = BigDecimal.ZERO;
+        String     newStatus  = determineStatus(newPaid, fr.getFinalFee());
+
+        String receipt = generateReceiptNumber(fr.getFeeMonth(), fr.getFeeYear());
+        fr.setPaidAmount(newPaid);
+        fr.setBalanceAmount(newBal);
+        fr.setPaymentStatus(newStatus);
+        fr.setPaymentMode(mode);
+        fr.setPaymentDate(LocalDate.now());
+        fr.setReceiptNumber(receipt);
+        if (req.getRemarks() != null) fr.setRemarks(req.getRemarks());
+        feeRecordRepository.save(fr);
+
+        paymentAllocationRepository.save(PaymentAllocation.builder()
+            .paymentId(paymentId).feeId(fr.getFeeId())
+            .allocatedAmount(toAllocate).receiptNumber(receipt)
+            .build());
+
+        results.add(AdvancePaymentResponse.Allocation.builder()
+            .feeId(fr.getFeeId()).month(fr.getFeeMonth()).year(fr.getFeeYear())
+            .amountAllocated(toAllocate).newBalance(newBal)
+            .newStatus(newStatus).receiptNumber(receipt)
+            .build());
+
+        remaining = remaining.subtract(toAllocate);
+    }
+
+    BigDecimal walletCreditAdded = BigDecimal.ZERO;
+    if (remaining.signum() > 0) {
+        walletCreditAdded = remaining;
+        walletService.credit(req.getRegNo(), walletCreditAdded,
+            WalletService.TxType.CREDIT_ADVANCE_PAYMENT, null,
+            "Excess advance payment", adminUser);
+    }
+
+    return AdvancePaymentResponse.builder()
+        .message("Advance payment processed across " + results.size() + " month(s)")
+        .paymentId(paymentId).regNo(req.getRegNo())
+        .totalReceived(req.getTotalAmount())
+        .walletApplied(walletApplied)
+        .walletCreditAdded(walletCreditAdded)
+        .allocations(results)
+        .build();
+}
 
 private FeeRecord autoGenerateFutureMonthRecord(Long regNo, int month, int year) {
     StudentFeeConfig cfg = feeConfigRepository.findByRegNoAndEffectiveToDateIsNull(regNo)
