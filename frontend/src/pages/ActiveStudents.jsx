@@ -32,16 +32,17 @@ function ActiveStudents() {
     paidCount: 0, partialCount: 0, duesCount: 0,
   });
 
-  // ── Row dropdown ────────────────────────────────────
+  // ── Row dropdown ─────────────────────────────────────
   const [openMenuRegNo, setOpenMenuRegNo] = useState(null);
+  const [menuPos,       setMenuPos]       = useState({ top: 0, right: 0 });
 
-  // ── Deactivate modal ────────────────────────────────
+  // ── Deactivate modal ─────────────────────────────────
   const [showDeactivate, setShowDeactivate]       = useState(false);
   const [deactivateTarget, setDeactivateTarget]   = useState(null);
   const [deactivateRemarks, setDeactivateRemarks] = useState("");
   const [deactivating, setDeactivating]           = useState(false);
 
-  // ── Edit modal ──────────────────────────────────────
+  // ── Edit modal ───────────────────────────────────────
   const [showEdit, setShowEdit]       = useState(false);
   const [editLoading, setEditLoading] = useState(false);
   const [editSaving, setEditSaving]   = useState(false);
@@ -52,12 +53,12 @@ function ActiveStudents() {
     gender: "", address: "", mobile: "", remarks: "",
   });
 
-  // ── Slot change + View Details + Change Seat ────────
+  // ── Slot change + View Details + Change Seat ─────────
   const [slotTarget,       setSlotTarget]       = useState(null);
   const [detailsTarget,    setDetailsTarget]    = useState(null);
   const [changeSeatTarget, setChangeSeatTarget] = useState(null);
 
-  // ── Fetch students with filters + sort ──────────────
+  // ── Fetch students ───────────────────────────────────
   const fetchStudents = useCallback(async (pageNum, gender, feeStatus, sort, order) => {
     setLoading(true);
     try {
@@ -76,14 +77,11 @@ function ActiveStudents() {
     }
   }, []);
 
-  // ── Fetch filter pill counts ────────────────────────
   const fetchCounts = useCallback(async () => {
     try {
       const res = await getActiveStudentsFilterCounts();
       setCounts(res.data);
-    } catch {
-      // silent — counts are nice-to-have
-    }
+    } catch { /* silent */ }
   }, []);
 
   useEffect(() => {
@@ -92,22 +90,16 @@ function ActiveStudents() {
 
   useEffect(() => { fetchCounts(); }, [fetchCounts]);
 
-  // ── Close dropdown on outside click ─────────────────
+  // ── Close dropdown on outside click ──────────────────
   useEffect(() => {
     const handler = () => setOpenMenuRegNo(null);
     document.addEventListener("click", handler);
     return () => document.removeEventListener("click", handler);
   }, []);
 
-  // ── Filter handlers — reset to page 0 when changed ──
-  const handleFeeStatusFilter = (value) => {
-    setFeeStatusFilter(value);
-    setPage(0);
-  };
-  const handleGenderFilter = (value) => {
-    setGenderFilter(value);
-    setPage(0);
-  };
+  // ── Filter handlers ───────────────────────────────────
+  const handleFeeStatusFilter = (value) => { setFeeStatusFilter(value); setPage(0); };
+  const handleGenderFilter    = (value) => { setGenderFilter(value);    setPage(0); };
 
   const handleSortChange = (e) => {
     const [newSortBy, newSortOrder] = e.target.value.split("_");
@@ -116,7 +108,7 @@ function ActiveStudents() {
     setPage(0);
   };
 
-  // ── Deactivate handlers ─────────────────────────────
+  // ── Deactivate handlers ───────────────────────────────
   const openDeactivate = (s) => {
     setOpenMenuRegNo(null);
     setDeactivateTarget(s);
@@ -147,7 +139,7 @@ function ActiveStudents() {
     }
   };
 
-  // ── Edit handlers ───────────────────────────────────
+  // ── Edit handlers ─────────────────────────────────────
   const openEdit = async (s) => {
     setOpenMenuRegNo(null);
     setEditRegNo(s.regNo);
@@ -199,12 +191,24 @@ function ActiveStudents() {
     }
   };
 
-  const openSlotChange  = (s) => { setOpenMenuRegNo(null); setSlotTarget(s); };
-  const openDetails     = (s) => { setOpenMenuRegNo(null); setDetailsTarget(s); };
-  const openChangeSeat  = (s) => { setOpenMenuRegNo(null); setChangeSeatTarget(s); };
+  const openSlotChange = (s) => { setOpenMenuRegNo(null); setSlotTarget(s); };
+  const openDetails    = (s) => { setOpenMenuRegNo(null); setDetailsTarget(s); };
+  const openChangeSeat = (s) => { setOpenMenuRegNo(null); setChangeSeatTarget(s); };
 
+  // ── Toggle menu — capture button position for fixed dropdown ──
   const toggleMenu = (e, regNo) => {
     e.stopPropagation();
+    if (openMenuRegNo !== regNo) {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const dropdownHeight = 220;
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const openUpward = spaceBelow < dropdownHeight;
+
+      setMenuPos({
+        top:   openUpward ? rect.top - dropdownHeight : rect.bottom + 4,
+        right: window.innerWidth - rect.right,
+      });
+    }
     setOpenMenuRegNo((cur) => (cur === regNo ? null : regNo));
   };
 
@@ -214,7 +218,6 @@ function ActiveStudents() {
     return <span className="badge bg-danger">🔴 DUES</span>;
   };
 
-  // ── Pill button helper ──────────────────────────────
   const FilterPill = ({ active, onClick, children }) => (
     <button
       type="button"
@@ -293,90 +296,42 @@ function ActiveStudents() {
                     </td>
                   </tr>
                 ) : (
-                  students.map((s, idx) => {
-                    const isNearBottom = students.length >= 6 && idx >= students.length - 2;
-                    return (
-                      <tr key={s.regNo}>
-                        <td className="text-muted">{page * PAGE_SIZE + idx + 1}</td>
-                        <td className="fw-bold">{s.regNo}</td>
-                        <td>{s.name}</td>
-                        <td>
-                          <span className={`badge ${s.gender === "Male" ? "bg-primary" : "bg-danger"}`}>
-                            {s.gender}
-                          </span>
-                        </td>
-                        <td>{s.mobile}</td>
-                        <td>
-                          {s.seatNo > 0
-                            ? <span className="badge bg-info text-dark fw-bold">{s.seatNo}</span>
-                            : <span className="text-muted">—</span>}
-                        </td>
-                        <td>
-                          {s.timeSlot
-                            ? <span className="badge bg-success">{s.timeSlot}</span>
-                            : <span className="text-muted">Not set</span>}
-                        </td>
-                        <td>{feeStatusBadge(s.feeStatus)}</td>
-                        <td>{s.dateOfAdmission}</td>
+                  students.map((s, idx) => (
+                    <tr key={s.regNo}>
+                      <td className="text-muted">{page * PAGE_SIZE + idx + 1}</td>
+                      <td className="fw-bold">{s.regNo}</td>
+                      <td>{s.name}</td>
+                      <td>
+                        <span className={`badge ${s.gender === "Male" ? "bg-primary" : "bg-danger"}`}>
+                          {s.gender}
+                        </span>
+                      </td>
+                      <td>{s.mobile}</td>
+                      <td>
+                        {s.seatNo > 0
+                          ? <span className="badge bg-info text-dark fw-bold">{s.seatNo}</span>
+                          : <span className="text-muted">—</span>}
+                      </td>
+                      <td>
+                        {s.timeSlot
+                          ? <span className="badge bg-success">{s.timeSlot}</span>
+                          : <span className="text-muted">Not set</span>}
+                      </td>
+                      <td>{feeStatusBadge(s.feeStatus)}</td>
+                      <td>{s.dateOfAdmission}</td>
 
-                        {/* ── ACTION COLUMN ── */}
-                        <td>
-                          <div style={{ position: "relative" }}>
-                            <button
-                              className="btn btn-sm btn-outline-secondary"
-                              onClick={(e) => toggleMenu(e, s.regNo)}
-                              title="Actions"
-                            >
-                              Actions ▾
-                            </button>
-
-                            {openMenuRegNo === s.regNo && (
-                              <ul
-                                className="dropdown-menu show shadow"
-                                style={{
-                                  position: "absolute", right: 0,
-                                  ...(isNearBottom
-                                    ? { bottom: "100%", marginBottom: "4px" }
-                                    : { top: "100%", marginTop: "4px" }),
-                                  minWidth: "200px", zIndex: 1050,
-                                }}
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <li>
-                                  <button className="dropdown-item" onClick={() => openEdit(s)}>
-                                    ✏️ Edit Details
-                                  </button>
-                                </li>
-                                <li>
-                                  <button className="dropdown-item" onClick={() => openSlotChange(s)}>
-                                    🕐 Change Slot
-                                  </button>
-                                </li>
-                                {s.seatNo > 0 && (
-                                  <li>
-                                    <button className="dropdown-item" onClick={() => openChangeSeat(s)}>
-                                      🔄 Change Seat
-                                    </button>
-                                  </li>
-                                )}
-                                <li>
-                                  <button className="dropdown-item" onClick={() => openDetails(s)}>
-                                    👁️ View Details
-                                  </button>
-                                </li>
-                                <li><hr className="dropdown-divider" /></li>
-                                <li>
-                                  <button className="dropdown-item text-danger" onClick={() => openDeactivate(s)}>
-                                    🔴 Deactivate
-                                  </button>
-                                </li>
-                              </ul>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })
+                      {/* ── ACTION COLUMN ── */}
+                      <td>
+                        <button
+                          className="btn btn-sm btn-outline-secondary"
+                          onClick={(e) => toggleMenu(e, s.regNo)}
+                          title="Actions"
+                        >
+                          Actions ▾
+                        </button>
+                      </td>
+                    </tr>
+                  ))
                 )}
               </tbody>
             </table>
@@ -397,6 +352,54 @@ function ActiveStudents() {
             </div>
           )}
         </>
+      )}
+
+      {/* ── FIXED DROPDOWN — renders outside table overflow ── */}
+      {openMenuRegNo !== null && (
+        <ul
+          className="dropdown-menu show shadow"
+          style={{
+            position: "fixed",
+            top:   menuPos.top,
+            right: menuPos.right,
+            minWidth: "200px",
+            zIndex: 1055,
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {students.filter(s => s.regNo === openMenuRegNo).map(s => (
+            <span key={s.regNo}>
+              <li>
+                <button className="dropdown-item" onClick={() => openEdit(s)}>
+                  ✏️ Edit Details
+                </button>
+              </li>
+              <li>
+                <button className="dropdown-item" onClick={() => openSlotChange(s)}>
+                  🕐 Change Slot
+                </button>
+              </li>
+              {s.seatNo > 0 && (
+                <li>
+                  <button className="dropdown-item" onClick={() => openChangeSeat(s)}>
+                    🔄 Change Seat
+                  </button>
+                </li>
+              )}
+              <li>
+                <button className="dropdown-item" onClick={() => openDetails(s)}>
+                  👁️ View Details
+                </button>
+              </li>
+              <li><hr className="dropdown-divider" /></li>
+              <li>
+                <button className="dropdown-item text-danger" onClick={() => openDeactivate(s)}>
+                  🔴 Deactivate
+                </button>
+              </li>
+            </span>
+          ))}
+        </ul>
       )}
 
       {/* ── Deactivate Modal ─────────────────── */}
