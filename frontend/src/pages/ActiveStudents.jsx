@@ -294,7 +294,7 @@ function ActiveStudents() {
                   </tr>
                 ) : (
                   students.map((s, idx) => {
-                    const isNearBottom = idx >= students.length - 2;
+                    const isNearBottom = students.length >= 6 && idx >= students.length - 2;
                     return (
                       <tr key={s.regNo}>
                         <td className="text-muted">{page * PAGE_SIZE + idx + 1}</td>
