@@ -20,11 +20,13 @@ import com.studycenter.repository.ActiveStudentProjection;
 import com.studycenter.repository.ActiveStudentsCountsProjection;
 import com.studycenter.repository.SeatBookingRepository;
 import com.studycenter.repository.StudentRepository;
+import com.studycenter.tenancy.TenantContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,6 +35,7 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -43,17 +46,38 @@ public class StudentService {
     private final StudentRepository     studentRepository;
     private final SeatBookingRepository seatBookingRepository;
     private final FeeService            feeService;
+    private final JdbcTemplate          jdbc;
 
     private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("HH:mm");
 
     @Transactional
     public StudentRegisterResponse registerStudent(StudentRegisterRequest request) {
-        log.info("Registering: regNo={}, name={}", request.getRegNo(), request.getName());
 
-        if (studentRepository.existsById(request.getRegNo()))
-            throw new InvalidRequestException("Student with regNo " + request.getRegNo() + " already exists.");
+        // ── Auto-generate reg_no atomically ──────────────────────────────
+        // UPDATE ... RETURNING is a single atomic PostgreSQL operation.
+        // Concurrent registrations will queue on the row lock and each
+        // get a unique sequential number. No duplicates possible.
+        UUID tenantId = TenantContext.requireTenantId();
+        Long regNo = jdbc.queryForObject(
+                "UPDATE tenant_settings " +
+                "SET next_reg_no = next_reg_no + 1 " +
+                "WHERE tenant_id = ?::uuid " +
+                "RETURNING next_reg_no - 1",
+                Long.class,
+                tenantId.toString()
+        );
+
+        if (regNo == null) {
+            throw new InvalidRequestException(
+                    "Tenant settings not found. Please complete onboarding first.");
+        }
+
+        log.info("Registering: autoRegNo={}, name={}", regNo, request.getName());
+
+        // Aadhaar uniqueness check (reg_no duplicates are now impossible)
         if (studentRepository.existsByAadhaarNo(request.getAadhaarNo()))
-            throw new InvalidRequestException("Aadhaar " + request.getAadhaarNo() + " is already registered.");
+            throw new InvalidRequestException(
+                    "Aadhaar " + request.getAadhaarNo() + " is already registered.");
 
         LocalDate admissionDate = LocalDate.parse(request.getDateOfAdmission());
         if (request.getInTime() == null || request.getInTime().isEmpty())
@@ -68,7 +92,7 @@ public class StudentService {
             throw new InvalidRequestException("inTime must be before outTime");
 
         Student student = Student.builder()
-                .regNo(request.getRegNo())
+                .regNo(regNo)
                 .name(request.getName())
                 .fatherName(request.getFatherName())
                 .aadhaarNo(request.getAadhaarNo())
@@ -84,7 +108,7 @@ public class StudentService {
         studentRepository.save(student);
 
         FeeLockRequest feeLockRequest = FeeLockRequest.builder()
-                .regNo(request.getRegNo())
+                .regNo(regNo)
                 .inTime(request.getInTime())
                 .outTime(request.getOutTime())
                 .joiningDate(admissionDate)
@@ -97,7 +121,7 @@ public class StudentService {
 
         return StudentRegisterResponse.builder()
                 .message("Student registered and fee locked successfully!")
-                .regNo(request.getRegNo())
+                .regNo(regNo)
                 .name(request.getName())
                 .gender(request.getGender())
                 .dateOfAdmission(request.getDateOfAdmission())
@@ -203,8 +227,7 @@ public class StudentService {
                 .mobile(student.getMobile())
                 .inTime(student.getInTime()  != null ? student.getInTime().format(TIME_FMT)  : null)
                 .outTime(student.getOutTime() != null ? student.getOutTime().format(TIME_FMT) : null)
-                .dateOfAdmission(student.getDateOfAdmission() != null
-                        ? student.getDateOfAdmission().toString() : null)
+                .dateOfAdmission(student.getDateOfAdmission() != null ? student.getDateOfAdmission().toString() : null)
                 .remarks(student.getRemarks())
                 .build();
     }
@@ -267,9 +290,6 @@ public class StudentService {
                 .build();
     }
 
-    // ═══════════════════════════════════════════════════════════════════
-    // ACTIVE STUDENTS — paginated with filters
-    // ═══════════════════════════════════════════════════════════════════
     public ActiveStudentsPageResponse getActiveStudentsPaged(int page, int size,
                                                               String genderFilter,
                                                               String feeStatusFilter) {
@@ -291,9 +311,6 @@ public class StudentService {
                 .build();
     }
 
-    // ═══════════════════════════════════════════════════════════════════
-    // FILTER PILL COUNTS — gender + fee status breakdown
-    // ═══════════════════════════════════════════════════════════════════
     public ActiveStudentsCountsResponse getActiveStudentsFilterCounts() {
         LocalDate today = LocalDate.now();
         ActiveStudentsCountsProjection p = studentRepository.getActiveStudentsCounts(
