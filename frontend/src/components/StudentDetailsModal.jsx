@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { getStudentFeeStatus } from "../services/api";
 import { toast } from "react-toastify";
 
-// ── ISO "2026-05-09" → "09-May-2026", null → "—" ──
+// ── "01-May-2026" formatter ──────────────────────────
 const formatDate = (iso) => {
   if (!iso) return "—";
   try {
@@ -17,29 +17,25 @@ const formatDate = (iso) => {
   }
 };
 
-// ── feeMonth=6, feeYear=2026 → "Jun-2026" ──
+// ── "Jun-2026" formatter ─────────────────────────────
 const formatFeeMonth = (month, year) => {
   if (!month || !year) return "—";
-  const date = new Date(year, month - 1, 1);
-  const mon  = date.toLocaleString("en-US", { month: "short" });
-  return `${mon}-${year}`;
+  const d = new Date(year, month - 1, 1);
+  return d.toLocaleString("en-US", { month: "short" }) + "-" + year;
 };
 
-// ── Payment mode badge ──
+// ── Payment mode badge ───────────────────────────────
 const paymentModeBadge = (mode) => {
   if (!mode) return <span className="text-muted">—</span>;
-  const colors = {
-    CASH:          "bg-success",
-    UPI:           "bg-primary",
-    ONLINE:        "bg-info text-dark",
-    BANK_TRANSFER: "bg-secondary",
-    CHEQUE:        "bg-warning text-dark",
+  const map = {
+    CASH:          { bg: "bg-success",   label: "💵 Cash" },
+    UPI:           { bg: "bg-primary",   label: "📱 UPI" },
+    ONLINE:        { bg: "bg-info",      label: "🌐 Online" },
+    CHEQUE:        { bg: "bg-warning text-dark", label: "🏦 Cheque" },
+    BANK_TRANSFER: { bg: "bg-secondary", label: "🔁 Bank Transfer" },
   };
-  return (
-    <span className={`badge ${colors[mode] || "bg-secondary"}`}>
-      {mode}
-    </span>
-  );
+  const cfg = map[mode.toUpperCase()] || { bg: "bg-secondary", label: mode };
+  return <span className={`badge ${cfg.bg}`}>{cfg.label}</span>;
 };
 
 export default function StudentDetailsModal({ regNo, studentName, onClose }) {
@@ -96,7 +92,7 @@ export default function StudentDetailsModal({ regNo, studentName, onClose }) {
                 <div className="alert alert-warning">No data available.</div>
               ) : (
                 <>
-                  {/* Basic info row */}
+                  {/* ── Basic info row ── */}
                   <div className="row g-3 text-center mb-3">
                     <div className="col-md-3">
                       <div className="border rounded p-2">
@@ -126,12 +122,12 @@ export default function StudentDetailsModal({ regNo, studentName, onClose }) {
                     </div>
                   </div>
 
-                  {/* Gender + Mobile */}
+                  {/* ── Gender + Mobile ── */}
                   <div className="alert alert-light py-2 small mb-3">
-                    👤 <strong>{data.gender}</strong>  &nbsp;|&nbsp;  📱 {data.mobile}
+                    👤 <strong>{data.gender}</strong> &nbsp;|&nbsp; 📱 {data.mobile}
                   </div>
 
-                  {/* Fee summary row */}
+                  {/* ── Fee summary cards ── */}
                   <div className="row g-3 text-center mb-3">
                     <div className="col-md-4 col-lg">
                       <div className="border rounded p-2">
@@ -175,7 +171,7 @@ export default function StudentDetailsModal({ regNo, studentName, onClose }) {
                     Overall Status: {overallBadge(data.overallStatus)}
                   </div>
 
-                  {/* Fee history table */}
+                  {/* ── Monthly fee records table ── */}
                   {data.monthlyRecords && data.monthlyRecords.length > 0 ? (
                     <div className="table-responsive">
                       <table className="table table-sm table-hover">
@@ -204,26 +200,25 @@ export default function StudentDetailsModal({ regNo, studentName, onClose }) {
                                 r.paymentStatus === "PARTIAL" ? "table-warning" : ""
                               }
                             >
-                              <td className="fw-bold text-nowrap">
-                                {formatFeeMonth(r.feeMonth, r.feeYear)}
-                              </td>
-                              <td className="text-nowrap">
-                                {formatDate(r.paymentDate)}
-                              </td>
-                              <td className="text-nowrap">
-                                {r.inTime} - {r.outTime}
-                              </td>
+                              {/* Fee Month — e.g. "Jun-2026" */}
+                              <td className="fw-bold">{formatFeeMonth(r.feeMonth, r.feeYear)}</td>
+
+                              {/* Payment Date — actual date money was paid */}
+                              <td>{formatDate(r.paymentDate)}</td>
+
+                              <td>{r.inTime} - {r.outTime}</td>
                               <td>₹{r.monthlyFee}</td>
                               <td>{r.discountAmount > 0 ? `₹${r.discountAmount}` : "—"}</td>
-                              <td>{r.admissionFee > 0 ? `₹${r.admissionFee}` : "—"}</td>
+                              <td>{r.admissionFee  > 0 ? `₹${r.admissionFee}`  : "—"}</td>
                               <td className="fw-bold">₹{r.finalFee}</td>
                               <td className="text-success">₹{r.paidAmount}</td>
                               <td className="text-danger fw-bold">₹{r.balanceAmount}</td>
                               <td>{statusBadge(r.paymentStatus)}</td>
+
+                              {/* Payment Mode — coloured badge */}
                               <td>{paymentModeBadge(r.paymentMode)}</td>
-                              <td>
-                                <small className="text-muted">{r.receiptNumber || "—"}</small>
-                              </td>
+
+                              <td><small className="text-muted">{r.receiptNumber || "—"}</small></td>
                             </tr>
                           ))}
                         </tbody>
