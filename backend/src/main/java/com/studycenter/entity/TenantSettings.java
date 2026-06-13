@@ -48,7 +48,7 @@ public class TenantSettings {
 
     /** Next reg_no to assign for this tenant. Incremented atomically on each registration. */
     @Column(name = "next_reg_no")
-    private Long nextRegNo;
+    private Long nextRegNo = 1L;
 
     @PrePersist
     @PreUpdate
