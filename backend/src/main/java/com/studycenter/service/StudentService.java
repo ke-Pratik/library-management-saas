@@ -26,6 +26,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -292,12 +293,20 @@ public class StudentService {
 
     public ActiveStudentsPageResponse getActiveStudentsPaged(int page, int size,
                                                               String genderFilter,
-                                                              String feeStatusFilter) {
+                                                              String feeStatusFilter,
+                                                              String sortBy,
+                                                              String sortOrder) {
         LocalDate today = LocalDate.now();
-        Pageable  pageable = PageRequest.of(page, size);
 
         String gender = (genderFilter == null || genderFilter.isBlank()) ? "ALL" : genderFilter;
         String feeSt  = (feeStatusFilter == null || feeStatusFilter.isBlank()) ? "ALL" : feeStatusFilter.toUpperCase();
+
+        // Whitelist sort column — only "seatNo" or "regNo" allowed
+        String sortColumn = "seatNo".equalsIgnoreCase(sortBy) ? "seatNo" : "regNo";
+        Sort.Direction direction = "desc".equalsIgnoreCase(sortOrder)
+                ? Sort.Direction.DESC : Sort.Direction.ASC;
+        Sort   sort    = Sort.by(direction, sortColumn);
+        Pageable pageable = PageRequest.of(page, size, sort);
 
         Page<ActiveStudentProjection> result = studentRepository
                 .findActiveStudentsWithDetails(
