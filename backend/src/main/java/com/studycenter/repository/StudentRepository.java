@@ -69,7 +69,12 @@ public interface StudentRepository extends JpaRepository<Student, Long> {
                 "    :feeStatusFilter = 'ALL' " +
                 "    OR sub.feeStatus = :feeStatusFilter " +
                 "    OR (:feeStatusFilter = 'DUES' AND sub.feeStatus IN ('PENDING', 'DUES')) " +
-                "  )",
+                "  ) " +
+                "ORDER BY " +
+                "  CASE WHEN :sortBy = 'seatNo' AND :sortOrder = 'asc'  THEN sub.seatNo END ASC  NULLS LAST, " +
+                "  CASE WHEN :sortBy = 'seatNo' AND :sortOrder = 'desc' THEN sub.seatNo END DESC NULLS LAST, " +
+                "  CASE WHEN :sortBy = 'regNo'  AND :sortOrder = 'asc'  THEN sub.regNo  END ASC, " +
+                "  CASE WHEN :sortBy = 'regNo'  AND :sortOrder = 'desc' THEN sub.regNo  END DESC",
         countQuery =
                 "SELECT COUNT(*) FROM ( " +
                 "  SELECT " +
@@ -104,6 +109,8 @@ public interface StudentRepository extends JpaRepository<Student, Long> {
             @Param("year") int year,
             @Param("genderFilter") String genderFilter,
             @Param("feeStatusFilter") String feeStatusFilter,
+            @Param("sortBy") String sortBy,
+            @Param("sortOrder") String sortOrder,
             Pageable pageable);
 
     @Query(
