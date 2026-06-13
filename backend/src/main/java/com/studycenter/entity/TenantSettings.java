@@ -46,6 +46,10 @@ public class TenantSettings {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
+    /** Next reg_no to assign for this tenant. Incremented atomically on each registration. */
+    @Column(name = "next_reg_no")
+    private Long nextRegNo;
+
     @PrePersist
     @PreUpdate
     void touch() {
