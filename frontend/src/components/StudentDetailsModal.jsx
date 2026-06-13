@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { getStudentFeeStatus } from "../services/api";
 import { toast } from "react-toastify";
 
-// ── Date formatter: ISO "2026-05-01" → "01-May-2026" ──
+// ── ISO "2026-05-09" → "09-May-2026", null → "—" ──
 const formatDate = (iso) => {
   if (!iso) return "—";
   try {
@@ -15,6 +15,31 @@ const formatDate = (iso) => {
   } catch {
     return iso;
   }
+};
+
+// ── feeMonth=6, feeYear=2026 → "Jun-2026" ──
+const formatFeeMonth = (month, year) => {
+  if (!month || !year) return "—";
+  const date = new Date(year, month - 1, 1);
+  const mon  = date.toLocaleString("en-US", { month: "short" });
+  return `${mon}-${year}`;
+};
+
+// ── Payment mode badge ──
+const paymentModeBadge = (mode) => {
+  if (!mode) return <span className="text-muted">—</span>;
+  const colors = {
+    CASH:          "bg-success",
+    UPI:           "bg-primary",
+    ONLINE:        "bg-info text-dark",
+    BANK_TRANSFER: "bg-secondary",
+    CHEQUE:        "bg-warning text-dark",
+  };
+  return (
+    <span className={`badge ${colors[mode] || "bg-secondary"}`}>
+      {mode}
+    </span>
+  );
 };
 
 export default function StudentDetailsModal({ regNo, studentName, onClose }) {
@@ -106,7 +131,7 @@ export default function StudentDetailsModal({ regNo, studentName, onClose }) {
                     👤 <strong>{data.gender}</strong>  &nbsp;|&nbsp;  📱 {data.mobile}
                   </div>
 
-                  {/* Fee summary row — NOW 6 cards (added Wallet) */}
+                  {/* Fee summary row */}
                   <div className="row g-3 text-center mb-3">
                     <div className="col-md-4 col-lg">
                       <div className="border rounded p-2">
@@ -138,8 +163,6 @@ export default function StudentDetailsModal({ regNo, studentName, onClose }) {
                         <div className="fw-bold fs-5 text-danger">₹{data.totalBalance}</div>
                       </div>
                     </div>
-
-                    {/* ── NEW: Wallet card ── */}
                     <div className="col-md-4 col-lg">
                       <div className="border rounded p-2" style={{ background: "#fffbeb" }}>
                         <div className="text-muted small">💰 Wallet</div>
@@ -152,13 +175,14 @@ export default function StudentDetailsModal({ regNo, studentName, onClose }) {
                     Overall Status: {overallBadge(data.overallStatus)}
                   </div>
 
-                  {/* Monthly records */}
+                  {/* Fee history table */}
                   {data.monthlyRecords && data.monthlyRecords.length > 0 ? (
                     <div className="table-responsive">
                       <table className="table table-sm table-hover">
                         <thead className="table-dark">
                           <tr>
-                            <th>Date</th>
+                            <th>Fee Month</th>
+                            <th>Payment Date</th>
                             <th>Slot</th>
                             <th>Monthly Fee</th>
                             <th>Discount</th>
@@ -167,6 +191,7 @@ export default function StudentDetailsModal({ regNo, studentName, onClose }) {
                             <th>Paid</th>
                             <th>Balance</th>
                             <th>Status</th>
+                            <th>Payment Mode</th>
                             <th>Receipt</th>
                           </tr>
                         </thead>
@@ -175,12 +200,19 @@ export default function StudentDetailsModal({ regNo, studentName, onClose }) {
                             <tr
                               key={i}
                               className={
-                                r.paymentStatus === "PAID" ? "table-success" :
+                                r.paymentStatus === "PAID"    ? "table-success" :
                                 r.paymentStatus === "PARTIAL" ? "table-warning" : ""
                               }
                             >
-                              <td className="fw-bold">{formatDate(r.joiningDateInMonth)}</td>
-                              <td>{r.inTime} - {r.outTime}</td>
+                              <td className="fw-bold text-nowrap">
+                                {formatFeeMonth(r.feeMonth, r.feeYear)}
+                              </td>
+                              <td className="text-nowrap">
+                                {formatDate(r.paymentDate)}
+                              </td>
+                              <td className="text-nowrap">
+                                {r.inTime} - {r.outTime}
+                              </td>
                               <td>₹{r.monthlyFee}</td>
                               <td>{r.discountAmount > 0 ? `₹${r.discountAmount}` : "—"}</td>
                               <td>{r.admissionFee > 0 ? `₹${r.admissionFee}` : "—"}</td>
@@ -188,7 +220,10 @@ export default function StudentDetailsModal({ regNo, studentName, onClose }) {
                               <td className="text-success">₹{r.paidAmount}</td>
                               <td className="text-danger fw-bold">₹{r.balanceAmount}</td>
                               <td>{statusBadge(r.paymentStatus)}</td>
-                              <td><small className="text-muted">{r.receiptNumber || "—"}</small></td>
+                              <td>{paymentModeBadge(r.paymentMode)}</td>
+                              <td>
+                                <small className="text-muted">{r.receiptNumber || "—"}</small>
+                              </td>
                             </tr>
                           ))}
                         </tbody>
