@@ -9,6 +9,7 @@ import {
 import { toast } from "react-toastify";
 import SlotChangeModal from "../components/SlotChangeModal";
 import StudentDetailsModal from "../components/StudentDetailsModal";
+import ChangeSeatModal from "../components/ChangeSeatModal";
 
 const PAGE_SIZE = 10;
 
@@ -35,10 +36,10 @@ function ActiveStudents() {
   const [openMenuRegNo, setOpenMenuRegNo] = useState(null);
 
   // ── Deactivate modal ────────────────────────────────
-  const [showDeactivate, setShowDeactivate]     = useState(false);
-  const [deactivateTarget, setDeactivateTarget] = useState(null);
+  const [showDeactivate, setShowDeactivate]       = useState(false);
+  const [deactivateTarget, setDeactivateTarget]   = useState(null);
   const [deactivateRemarks, setDeactivateRemarks] = useState("");
-  const [deactivating, setDeactivating]         = useState(false);
+  const [deactivating, setDeactivating]           = useState(false);
 
   // ── Edit modal ──────────────────────────────────────
   const [showEdit, setShowEdit]       = useState(false);
@@ -51,9 +52,10 @@ function ActiveStudents() {
     gender: "", address: "", mobile: "", remarks: "",
   });
 
-  // ── Slot change + View Details ──────────────────────
-  const [slotTarget, setSlotTarget] = useState(null);
-  const [detailsTarget, setDetailsTarget] = useState(null);
+  // ── Slot change + View Details + Change Seat ────────
+  const [slotTarget,       setSlotTarget]       = useState(null);
+  const [detailsTarget,    setDetailsTarget]    = useState(null);
+  const [changeSeatTarget, setChangeSeatTarget] = useState(null);
 
   // ── Fetch students with filters + sort ──────────────
   const fetchStudents = useCallback(async (pageNum, gender, feeStatus, sort, order) => {
@@ -197,8 +199,9 @@ function ActiveStudents() {
     }
   };
 
-  const openSlotChange = (s) => { setOpenMenuRegNo(null); setSlotTarget(s); };
-  const openDetails    = (s) => { setOpenMenuRegNo(null); setDetailsTarget(s); };
+  const openSlotChange  = (s) => { setOpenMenuRegNo(null); setSlotTarget(s); };
+  const openDetails     = (s) => { setOpenMenuRegNo(null); setDetailsTarget(s); };
+  const openChangeSeat  = (s) => { setOpenMenuRegNo(null); setChangeSeatTarget(s); };
 
   const toggleMenu = (e, regNo) => {
     e.stopPropagation();
@@ -284,7 +287,11 @@ function ActiveStudents() {
               </thead>
               <tbody>
                 {students.length === 0 ? (
-                  <tr><td colSpan="10" className="text-center py-5 text-muted"><div className="fs-5">📭</div>No students match the current filters</td></tr>
+                  <tr>
+                    <td colSpan="10" className="text-center py-5 text-muted">
+                      <div className="fs-5">📭</div>No students match the current filters
+                    </td>
+                  </tr>
                 ) : (
                   students.map((s, idx) => {
                     const isNearBottom = idx >= students.length - 2;
@@ -345,6 +352,13 @@ function ActiveStudents() {
                                       🕐 Change Slot
                                     </button>
                                   </li>
+                                  {s.seatNo > 0 && (
+                                    <li>
+                                      <button className="dropdown-item" onClick={() => openChangeSeat(s)}>
+                                        🔄 Change Seat
+                                      </button>
+                                    </li>
+                                  )}
                                   <li>
                                     <button className="dropdown-item" onClick={() => openDetails(s)}>
                                       👁️ View Details
@@ -408,16 +422,20 @@ function ActiveStudents() {
                   <label className="form-label fw-semibold">
                     Reason / Remarks <span className="text-muted fw-normal">(optional)</span>
                   </label>
-                  <textarea className="form-control" rows={3}
+                  <textarea
+                    className="form-control" rows={3}
                     placeholder="e.g. Left city, completed course..."
                     value={deactivateRemarks}
                     onChange={(e) => setDeactivateRemarks(e.target.value)}
-                    disabled={deactivating} />
+                    disabled={deactivating}
+                  />
                 </div>
                 <div className="modal-footer">
                   <button className="btn btn-secondary" onClick={closeDeactivate} disabled={deactivating}>Cancel</button>
                   <button className="btn btn-danger" onClick={confirmDeactivate} disabled={deactivating}>
-                    {deactivating ? <><span className="spinner-border spinner-border-sm me-2" />Deactivating...</> : "🔴 Yes, Deactivate"}
+                    {deactivating
+                      ? <><span className="spinner-border spinner-border-sm me-2" />Deactivating...</>
+                      : "🔴 Yes, Deactivate"}
                   </button>
                 </div>
               </div>
@@ -505,7 +523,9 @@ function ActiveStudents() {
                     <>
                       <button className="btn btn-secondary" onClick={closeEdit} disabled={editSaving || editLoading}>Cancel</button>
                       <button type="submit" form="editStudentForm" className="btn btn-primary" disabled={editSaving || editLoading}>
-                        {editSaving ? <><span className="spinner-border spinner-border-sm me-2" />Saving...</> : "💾 Save Changes"}
+                        {editSaving
+                          ? <><span className="spinner-border spinner-border-sm me-2" />Saving...</>
+                          : "💾 Save Changes"}
                       </button>
                     </>
                   )}
@@ -528,12 +548,24 @@ function ActiveStudents() {
         />
       )}
 
-      {/* ── View Details Modal (NEW) ───────────── */}
+      {/* ── View Details Modal ─────────────────── */}
       {detailsTarget && (
         <StudentDetailsModal
           regNo={detailsTarget.regNo}
           studentName={detailsTarget.name}
           onClose={() => setDetailsTarget(null)}
+        />
+      )}
+
+      {/* ── Change Seat Modal ──────────────────── */}
+      {changeSeatTarget && (
+        <ChangeSeatModal
+          student={changeSeatTarget}
+          onClose={() => setChangeSeatTarget(null)}
+          onSaved={() => {
+            fetchStudents(page, genderFilter, feeStatusFilter, sortBy, sortOrder);
+            fetchCounts();
+          }}
         />
       )}
     </div>
