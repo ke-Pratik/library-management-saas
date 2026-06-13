@@ -319,60 +319,59 @@ function ActiveStudents() {
                         <td>{feeStatusBadge(s.feeStatus)}</td>
                         <td>{s.dateOfAdmission}</td>
 
+                        {/* ── ACTION COLUMN ── */}
                         <td>
-                          <div className="d-flex gap-2 align-items-center">
-                            <button className="btn btn-sm btn-outline-primary" onClick={() => openEdit(s)}>
-                              ✏️ Edit
+                          <div style={{ position: "relative" }}>
+                            <button
+                              className="btn btn-sm btn-outline-secondary"
+                              onClick={(e) => toggleMenu(e, s.regNo)}
+                              title="Actions"
+                            >
+                              Actions ▾
                             </button>
 
-                            <div style={{ position: "relative" }}>
-                              <button
-                                className="btn btn-sm btn-outline-secondary"
-                                onClick={(e) => toggleMenu(e, s.regNo)}
-                                title="More actions"
-                                style={{ minWidth: "32px" }}
+                            {openMenuRegNo === s.regNo && (
+                              <ul
+                                className="dropdown-menu show shadow"
+                                style={{
+                                  position: "absolute", right: 0,
+                                  ...(isNearBottom
+                                    ? { bottom: "100%", marginBottom: "4px" }
+                                    : { top: "100%", marginTop: "4px" }),
+                                  minWidth: "200px", zIndex: 1050,
+                                }}
+                                onClick={(e) => e.stopPropagation()}
                               >
-                                ⋮
-                              </button>
-
-                              {openMenuRegNo === s.regNo && (
-                                <ul
-                                  className="dropdown-menu show shadow"
-                                  style={{
-                                    position: "absolute", right: 0,
-                                    ...(isNearBottom
-                                      ? { bottom: "100%", marginBottom: "4px" }
-                                      : { top: "100%", marginTop: "4px" }),
-                                    minWidth: "200px", zIndex: 1050,
-                                  }}
-                                  onClick={(e) => e.stopPropagation()}
-                                >
+                                <li>
+                                  <button className="dropdown-item" onClick={() => openEdit(s)}>
+                                    ✏️ Edit Details
+                                  </button>
+                                </li>
+                                <li>
+                                  <button className="dropdown-item" onClick={() => openSlotChange(s)}>
+                                    🕐 Change Slot
+                                  </button>
+                                </li>
+                                {s.seatNo > 0 && (
                                   <li>
-                                    <button className="dropdown-item" onClick={() => openSlotChange(s)}>
-                                      🕐 Change Slot
+                                    <button className="dropdown-item" onClick={() => openChangeSeat(s)}>
+                                      🔄 Change Seat
                                     </button>
                                   </li>
-                                  {s.seatNo > 0 && (
-                                    <li>
-                                      <button className="dropdown-item" onClick={() => openChangeSeat(s)}>
-                                        🔄 Change Seat
-                                      </button>
-                                    </li>
-                                  )}
-                                  <li>
-                                    <button className="dropdown-item" onClick={() => openDetails(s)}>
-                                      👁️ View Details
-                                    </button>
-                                  </li>
-                                  <li><hr className="dropdown-divider" /></li>
-                                  <li>
-                                    <button className="dropdown-item text-danger" onClick={() => openDeactivate(s)}>
-                                      🔴 Deactivate
-                                    </button>
-                                  </li>
-                                </ul>
-                              )}
-                            </div>
+                                )}
+                                <li>
+                                  <button className="dropdown-item" onClick={() => openDetails(s)}>
+                                    👁️ View Details
+                                  </button>
+                                </li>
+                                <li><hr className="dropdown-divider" /></li>
+                                <li>
+                                  <button className="dropdown-item text-danger" onClick={() => openDeactivate(s)}>
+                                    🔴 Deactivate
+                                  </button>
+                                </li>
+                              </ul>
+                            )}
                           </div>
                         </td>
                       </tr>
