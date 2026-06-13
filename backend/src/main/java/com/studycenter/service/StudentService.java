@@ -26,7 +26,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -55,9 +54,6 @@ public class StudentService {
     public StudentRegisterResponse registerStudent(StudentRegisterRequest request) {
 
         // ── Auto-generate reg_no atomically ──────────────────────────────
-        // UPDATE ... RETURNING is a single atomic PostgreSQL operation.
-        // Concurrent registrations will queue on the row lock and each
-        // get a unique sequential number. No duplicates possible.
         UUID tenantId = TenantContext.requireTenantId();
         Long regNo = jdbc.queryForObject(
                 "UPDATE tenant_settings " +
@@ -75,7 +71,7 @@ public class StudentService {
 
         log.info("Registering: autoRegNo={}, name={}", regNo, request.getName());
 
-        // Aadhaar uniqueness check (reg_no duplicates are now impossible)
+        // Aadhaar uniqueness check
         if (studentRepository.existsByAadhaarNo(request.getAadhaarNo()))
             throw new InvalidRequestException(
                     "Aadhaar " + request.getAadhaarNo() + " is already registered.");
@@ -301,17 +297,20 @@ public class StudentService {
         String gender = (genderFilter == null || genderFilter.isBlank()) ? "ALL" : genderFilter;
         String feeSt  = (feeStatusFilter == null || feeStatusFilter.isBlank()) ? "ALL" : feeStatusFilter.toUpperCase();
 
-        // Whitelist sort column — only "seatNo" or "regNo" allowed
-        String sortColumn = "seatNo".equalsIgnoreCase(sortBy) ? "seatNo" : "regNo";
-        Sort.Direction direction = "desc".equalsIgnoreCase(sortOrder)
-                ? Sort.Direction.DESC : Sort.Direction.ASC;
-        Sort   sort    = Sort.by(direction, sortColumn);
-        Pageable pageable = PageRequest.of(page, size, sort);
+        // Whitelist sort column — only "seatNo" or "regNo" allowed (security: prevents injection)
+        String sortColumn    = "seatNo".equalsIgnoreCase(sortBy) ? "seatNo" : "regNo";
+        String sortDirection = "desc".equalsIgnoreCase(sortOrder) ? "desc" : "asc";
+
+        // Pass PageRequest WITHOUT Sort — Spring Data only adds LIMIT/OFFSET.
+        // The ORDER BY CASE WHEN is embedded directly in the @Query SQL.
+        Pageable pageable = PageRequest.of(page, size);
 
         Page<ActiveStudentProjection> result = studentRepository
                 .findActiveStudentsWithDetails(
                         today.getMonthValue(), today.getYear(),
-                        gender, feeSt, pageable);
+                        gender, feeSt,
+                        sortColumn, sortDirection,
+                        pageable);
 
         return ActiveStudentsPageResponse.builder()
                 .students(result.getContent().stream().map(this::mapProjectionToDto).toList())
