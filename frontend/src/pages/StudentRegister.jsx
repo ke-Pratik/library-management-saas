@@ -18,13 +18,13 @@ function StudentRegister() {
     remarks: "",
   };
 
-  const [form, setForm]               = useState(emptyForm);
-  const [errors, setErrors]           = useState({});
-  const [showModal, setShowModal]     = useState(false);
-  const [modalFee, setModalFee]       = useState(null);
-  const [modalLoading, setModalLoading] = useState(false);
+  const [form, setForm]                     = useState(emptyForm);
+  const [errors, setErrors]                 = useState({});
+  const [showModal, setShowModal]           = useState(false);
+  const [modalFee, setModalFee]             = useState(null);
+  const [modalLoading, setModalLoading]     = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
-  const [feePreview, setFeePreview]   = useState(null);
+  const [feePreview, setFeePreview]         = useState(null);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -37,19 +37,17 @@ function StudentRegister() {
 
   const validate = () => {
     const e = {};
-    if (!form.name.trim())                          e.name           = "Name is required";
-    if (!/^\d{12}$/.test(form.aadhaarNo))           e.aadhaarNo      = "Aadhaar must be exactly 12 digits";
-    if (!/^\d{10}$/.test(form.mobile))              e.mobile         = "Mobile must be exactly 10 digits";
-    if (!form.dateOfAdmission)                      e.dateOfAdmission = "Admission date is required";
-    if (!form.inTime)                               e.inTime         = "In Time is required";
-    if (!form.outTime)                              e.outTime        = "Out Time is required";
-    if (form.inTime && form.outTime && form.inTime >= form.outTime)
-                                                    e.outTime        = "Out Time must be after In Time";
-    if (!form.address.trim())                       e.address        = "Address is required";
+    if (!form.name.trim())                                          e.name            = "Name is required";
+    if (!/^\d{12}$/.test(form.aadhaarNo))                          e.aadhaarNo       = "Aadhaar must be exactly 12 digits";
+    if (!/^\d{10}$/.test(form.mobile))                             e.mobile          = "Mobile must be exactly 10 digits";
+    if (!form.dateOfAdmission)                                     e.dateOfAdmission = "Admission date is required";
+    if (!form.inTime)                                              e.inTime          = "In Time is required";
+    if (!form.outTime)                                             e.outTime         = "Out Time is required";
+    if (form.inTime && form.outTime && form.inTime >= form.outTime) e.outTime         = "Out Time must be after In Time";
+    if (!form.address.trim())                                      e.address         = "Address is required";
     return e;
   };
 
-  // Preview fee inline (optional — user can click this before submitting)
   const handlePreviewFee = async () => {
     if (!form.inTime || !form.outTime || !form.dateOfAdmission) {
       toast.warning("Please fill In Time, Out Time, and Admission Date to preview fee.");
@@ -77,7 +75,6 @@ function StudentRegister() {
     }
   };
 
-  // On "Register & Lock Fee" — validate then open confirmation modal
   const handleOpenModal = async (e) => {
     e.preventDefault();
     const validationErrors = validate();
@@ -86,7 +83,6 @@ function StudentRegister() {
       toast.error("Please fix the errors before submitting");
       return;
     }
-    // Always fetch fresh fee data for the modal
     setPreviewLoading(true);
     try {
       const res = await previewFee({
@@ -106,7 +102,6 @@ function StudentRegister() {
     }
   };
 
-  // Called when user clicks "Confirm Register" inside the modal
   const handleConfirmRegister = async () => {
     setModalLoading(true);
     try {
@@ -151,6 +146,26 @@ function StudentRegister() {
 
   const val = (v) => v || "—";
 
+  // Reusable label style for modal table
+  const labelStyle = {
+    fontSize: "0.75rem",
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+    fontWeight: "600",
+    color: "#6c757d",
+    backgroundColor: "#f8f9fa",
+    width: "25%",
+    verticalAlign: "middle",
+    padding: "10px 12px",
+  };
+
+  const valueStyle = {
+    fontWeight: "600",
+    fontSize: "0.92rem",
+    padding: "10px 12px",
+    verticalAlign: "middle",
+  };
+
   return (
     <div>
       <h2 className="page-title">📝 Student Registration</h2>
@@ -165,105 +180,156 @@ function StudentRegister() {
           <div className="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
             <div className="modal-content">
 
-              <div className="modal-header bg-primary text-white">
+              {/* Modal Header */}
+              <div className="modal-header bg-primary text-white py-3">
                 <h5 className="modal-title fw-bold">
                   🔍 Verify Student Details Before Registration
                 </h5>
               </div>
 
-              <div className="modal-body">
-                <p className="text-muted mb-3">
+              {/* Modal Body */}
+              <div className="modal-body px-4 py-3">
+                <p className="text-muted mb-4" style={{ fontSize: "0.88rem" }}>
                   Please verify all details carefully. Click{" "}
                   <strong>Go Back &amp; Edit</strong> to make corrections, or{" "}
                   <strong>Confirm Register</strong> to complete registration.
                 </p>
 
-                {/* Student Details */}
-                <div className="card mb-3">
-                  <div className="card-header fw-bold bg-light">👤 Student Details</div>
-                  <div className="card-body">
-                    <div className="row g-2">
-                      <div className="col-md-6">
-                        <small className="text-muted d-block">Reg No</small>
-                        <span className="badge bg-secondary fs-6">Auto Generated</span>
-                      </div>
-                      <div className="col-md-6">
-                        <small className="text-muted d-block">Name</small>
-                        <strong>{val(form.name)}</strong>
-                      </div>
-                      <div className="col-md-6">
-                        <small className="text-muted d-block">Father Name</small>
-                        <span>{val(form.fatherName)}</span>
-                      </div>
-                      <div className="col-md-6">
-                        <small className="text-muted d-block">Gender</small>
-                        <span>{val(form.gender)}</span>
-                      </div>
-                      <div className="col-md-6">
-                        <small className="text-muted d-block">Mobile Number</small>
-                        <span>{val(form.mobile)}</span>
-                      </div>
-                      <div className="col-md-6">
-                        <small className="text-muted d-block">Aadhaar Number</small>
-                        <span>{val(form.aadhaarNo)}</span>
-                      </div>
-                      <div className="col-md-6">
-                        <small className="text-muted d-block">Admission Date</small>
-                        <span>{val(form.dateOfAdmission)}</span>
-                      </div>
-                      <div className="col-md-6">
-                        <small className="text-muted d-block">Slot</small>
-                        <span>
-                          {form.inTime && form.outTime
-                            ? `${form.inTime} – ${form.outTime}`
-                            : "—"}
-                        </span>
-                      </div>
-                      <div className="col-12">
-                        <small className="text-muted d-block">Address</small>
-                        <span>{val(form.address)}</span>
-                      </div>
-                      <div className="col-12">
-                        <small className="text-muted d-block">Remarks</small>
-                        <span>{val(form.remarks)}</span>
-                      </div>
-                    </div>
+                {/* ── Student Details Table ── */}
+                <div className="card mb-3 border shadow-sm">
+                  <div
+                    className="card-header fw-bold border-bottom"
+                    style={{ backgroundColor: "#e9ecef", fontSize: "0.95rem" }}
+                  >
+                    👤 Student Details
+                  </div>
+                  <div className="card-body p-0">
+                    <table className="table table-bordered mb-0" style={{ fontSize: "0.9rem" }}>
+                      <tbody>
+                        <tr>
+                          <td style={labelStyle}>Reg No</td>
+                          <td style={valueStyle}>
+                            <span className="badge bg-secondary" style={{ fontSize: "0.82rem" }}>
+                              Auto Generated
+                            </span>
+                          </td>
+                          <td style={labelStyle}>Name</td>
+                          <td style={valueStyle}>{val(form.name)}</td>
+                        </tr>
+                        <tr>
+                          <td style={labelStyle}>Father Name</td>
+                          <td style={{ ...valueStyle, fontWeight: "400" }}>{val(form.fatherName)}</td>
+                          <td style={labelStyle}>Gender</td>
+                          <td style={valueStyle}>{val(form.gender)}</td>
+                        </tr>
+                        <tr>
+                          <td style={labelStyle}>Mobile Number</td>
+                          <td style={valueStyle}>{val(form.mobile)}</td>
+                          <td style={labelStyle}>Aadhaar Number</td>
+                          <td style={valueStyle}>{val(form.aadhaarNo)}</td>
+                        </tr>
+                        <tr>
+                          <td style={labelStyle}>Admission Date</td>
+                          <td style={valueStyle}>{val(form.dateOfAdmission)}</td>
+                          <td style={labelStyle}>Slot</td>
+                          <td style={valueStyle}>
+                            {form.inTime && form.outTime
+                              ? `${form.inTime} – ${form.outTime}`
+                              : "—"}
+                          </td>
+                        </tr>
+                        <tr>
+                          <td style={labelStyle}>Address</td>
+                          <td colSpan={3} style={{ ...valueStyle, fontWeight: "400" }}>
+                            {val(form.address)}
+                          </td>
+                        </tr>
+                        <tr>
+                          <td style={labelStyle}>Remarks</td>
+                          <td
+                            colSpan={3}
+                            style={{ ...valueStyle, fontWeight: "400", color: "#6c757d", fontStyle: "italic" }}
+                          >
+                            {val(form.remarks)}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
                   </div>
                 </div>
 
-                {/* Fee Breakdown */}
+                {/* ── Fee Breakdown Table ── */}
                 {modalFee && (
-                  <div className="card">
-                    <div className="card-header fw-bold bg-light">💰 Fee Breakdown</div>
-                    <div className="card-body">
-                      <div className="row g-3 text-center">
-                        <div className="col-6 col-md-4">
-                          <small className="text-muted d-block">Slot / Monthly Fee</small>
-                          <span className="fw-bold">{modalFee.slotName}</span>
-                          <span className="ms-1">₹{modalFee.monthlyFee}</span>
-                        </div>
-                        <div className="col-6 col-md-4">
-                          <small className="text-muted d-block">
-                            {modalFee.isMidMonthJoining ? "Pro-rated Fee" : "Full Month Fee"}
-                          </small>
-                          <span>₹{modalFee.proratedFee}</span>
-                        </div>
-                        <div className="col-6 col-md-4">
-                          <small className="text-muted d-block">Admission Fee</small>
-                          <span>₹{modalFee.admissionFee}</span>
-                        </div>
-                        <div className="col-6 col-md-4">
-                          <small className="text-muted d-block">Discount</small>
-                          <span className="text-success">– ₹{modalFee.discountAmount}</span>
-                        </div>
-                        <div className="col-12 col-md-4">
-                          <small className="text-muted d-block fw-bold">Total Due Now</small>
-                          <span className="badge bg-danger fs-5">₹{modalFee.finalFee}</span>
-                        </div>
-                      </div>
+                  <div className="card border shadow-sm">
+                    <div
+                      className="card-header fw-bold border-bottom"
+                      style={{ backgroundColor: "#e9ecef", fontSize: "0.95rem" }}
+                    >
+                      💰 Fee Breakdown
+                    </div>
+                    <div className="card-body p-0">
+                      <table className="table table-bordered mb-0" style={{ fontSize: "0.9rem" }}>
+                        <thead>
+                          <tr>
+                            {[
+                              "Slot / Monthly Fee",
+                              modalFee.isMidMonthJoining ? "Pro-rated Fee" : "Full Month Fee",
+                              "Admission Fee",
+                              "Discount",
+                              "Total Due Now",
+                            ].map((h) => (
+                              <th
+                                key={h}
+                                className="text-center"
+                                style={{
+                                  fontSize: "0.72rem",
+                                  textTransform: "uppercase",
+                                  letterSpacing: "0.05em",
+                                  backgroundColor: "#f8f9fa",
+                                  color: "#6c757d",
+                                  fontWeight: "600",
+                                  padding: "10px 8px",
+                                }}
+                              >
+                                {h}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr className="text-center">
+                            <td style={valueStyle}>
+                              <div>{modalFee.slotName}</div>
+                              <div className="text-muted" style={{ fontSize: "0.78rem", fontWeight: "400" }}>
+                                ₹{modalFee.monthlyFee}/month
+                              </div>
+                            </td>
+                            <td style={valueStyle}>₹{modalFee.proratedFee}</td>
+                            <td style={valueStyle}>₹{modalFee.admissionFee}</td>
+                            <td style={{ ...valueStyle, color: "#198754" }}>
+                              – ₹{modalFee.discountAmount}
+                            </td>
+                            <td style={{ ...valueStyle, padding: "10px 8px" }}>
+                              <span
+                                className="badge bg-danger"
+                                style={{ fontSize: "1rem", padding: "8px 14px" }}
+                              >
+                                ₹{modalFee.finalFee}
+                              </span>
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
                       {modalFee.nextMonthMessage && (
-                        <div className="text-center text-muted small mt-3">
-                          {modalFee.nextMonthMessage}
+                        <div
+                          className="border-top px-3 py-2"
+                          style={{
+                            fontSize: "0.82rem",
+                            color: "#6c757d",
+                            backgroundColor: "#f8f9fa",
+                          }}
+                        >
+                          ℹ️ {modalFee.nextMonthMessage}
                         </div>
                       )}
                     </div>
@@ -271,6 +337,7 @@ function StudentRegister() {
                 )}
               </div>
 
+              {/* Modal Footer */}
               <div className="modal-footer">
                 <button
                   className="btn btn-outline-secondary"
