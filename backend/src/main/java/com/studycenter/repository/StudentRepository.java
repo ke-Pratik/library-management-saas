@@ -69,8 +69,7 @@ public interface StudentRepository extends JpaRepository<Student, Long> {
                 "    :feeStatusFilter = 'ALL' " +
                 "    OR sub.feeStatus = :feeStatusFilter " +
                 "    OR (:feeStatusFilter = 'DUES' AND sub.feeStatus IN ('PENDING', 'DUES')) " +
-                "  ) " +
-                "ORDER BY sub.regNo ASC",
+                "  )",
         countQuery =
                 "SELECT COUNT(*) FROM ( " +
                 "  SELECT " +

@@ -46,15 +46,17 @@ public class StudentController {
         return ResponseEntity.ok(studentService.reactivateStudent(request));
     }
 
-    // ── Active students — paginated with optional filters ──
+    // ── Active students — paginated with optional filters + sorting ──
     @GetMapping("/active")
     public ResponseEntity<ActiveStudentsPageResponse> active(
-            @RequestParam(defaultValue = "0")    int page,
-            @RequestParam(defaultValue = "10")   int size,
-            @RequestParam(defaultValue = "ALL")  String genderFilter,
-            @RequestParam(defaultValue = "ALL")  String feeStatusFilter) {
+            @RequestParam(defaultValue = "0")       int page,
+            @RequestParam(defaultValue = "10")      int size,
+            @RequestParam(defaultValue = "ALL")     String genderFilter,
+            @RequestParam(defaultValue = "ALL")     String feeStatusFilter,
+            @RequestParam(defaultValue = "regNo")   String sortBy,
+            @RequestParam(defaultValue = "asc")     String sortOrder) {
         return ResponseEntity.ok(
-                studentService.getActiveStudentsPaged(page, size, genderFilter, feeStatusFilter));
+                studentService.getActiveStudentsPaged(page, size, genderFilter, feeStatusFilter, sortBy, sortOrder));
     }
 
     // ── NEW: filter pill counts ──
