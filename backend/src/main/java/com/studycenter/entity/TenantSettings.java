@@ -47,6 +47,7 @@ public class TenantSettings {
     private LocalDateTime updatedAt;
 
     /** Next reg_no to assign for this tenant. Incremented atomically on each registration. */
+    @Builder.Default
     @Column(name = "next_reg_no")
     private Long nextRegNo = 1L;
 
