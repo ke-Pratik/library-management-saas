@@ -1,6 +1,8 @@
 package com.studycenter.controller;
 
 import com.studycenter.dto.CancelBookingResponse;
+import com.studycenter.dto.ChangeSeatRequest;
+import com.studycenter.dto.ChangeSeatResponse;
 import com.studycenter.dto.SeatAllotRequest;
 import com.studycenter.dto.SeatAllotResponse;
 import com.studycenter.dto.SeatAvailabilityResponse;
@@ -58,25 +60,24 @@ public class SeatController {
         return ResponseEntity.ok(seatService.cancelBooking(bookingId));
     }
 
+    @PutMapping("/change")
+    public ResponseEntity<ChangeSeatResponse> changeSeat(
+            @Valid @RequestBody ChangeSeatRequest request) {
+        return ResponseEntity.ok(seatService.changeSeat(request));
+    }
+
     @GetMapping("/student/{regNo}")
     public ResponseEntity<StudentBookingsResponse> studentBookings(@PathVariable Long regNo) {
         return ResponseEntity.ok(seatService.getStudentBookings(regNo));
     }
 
     @GetMapping("/availability")
-public ResponseEntity<?> availability(
-        @RequestParam String gender,
-        @RequestParam @DateTimeFormat(pattern = "HH:mm") LocalTime inTime,
-        @RequestParam @DateTimeFormat(pattern = "HH:mm") LocalTime outTime,
-        @RequestParam(required = false) Integer seatNo) {
-
-    return ResponseEntity.ok(
-            seatService.getSeatAvailability(
-                    gender,
-                    inTime,
-                    outTime,
-                    seatNo
-            )
-    );
-}
+    public ResponseEntity<?> availability(
+            @RequestParam String gender,
+            @RequestParam @DateTimeFormat(pattern = "HH:mm") LocalTime inTime,
+            @RequestParam @DateTimeFormat(pattern = "HH:mm") LocalTime outTime,
+            @RequestParam(required = false) Integer seatNo) {
+        return ResponseEntity.ok(
+                seatService.getSeatAvailability(gender, inTime, outTime, seatNo));
+    }
 }
