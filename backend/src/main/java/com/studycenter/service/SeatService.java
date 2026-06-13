@@ -2,6 +2,8 @@ package com.studycenter.service;
 
 import com.studycenter.config.SeatConfig;
 import com.studycenter.dto.CancelBookingResponse;
+import com.studycenter.dto.ChangeSeatRequest;
+import com.studycenter.dto.ChangeSeatResponse;
 import com.studycenter.dto.SeatAllotRequest;
 import com.studycenter.dto.SeatAllotResponse;
 import com.studycenter.dto.SeatAvailabilityResponse;
@@ -62,11 +64,10 @@ public class SeatService {
 
         String message;
         SeatBooking occupiedBooking = bookings.stream()
-                .filter(b ->
-                        outTime.isAfter(b.getStartTime()) &&
-                                inTime.isBefore(b.getEndTime()))
+                .filter(b -> outTime.isAfter(b.getStartTime()) && inTime.isBefore(b.getEndTime()))
                 .findFirst()
                 .orElse(null);
+
         if (!genderAllowed) message = "Seat " + seatNo + " (" + zone + ") not allowed for " + gender;
         else if (!isAvailable) message = "Seat " + seatNo + " is booked for overlapping time";
         else message = "Seat " + seatNo + " is AVAILABLE for " + inTime.format(TIME_FMT) + " - " + outTime.format(TIME_FMT);
@@ -75,36 +76,20 @@ public class SeatService {
         Long occupiedRegNo = null;
 
         if (occupiedBooking != null) {
-
             occupiedRegNo = occupiedBooking.getRegNo();
-
-            List<Student> students =
-                    studentRepository.searchActiveByRegNo(occupiedRegNo);
-
-            if (!students.isEmpty()) {
-                occupiedStudentName = students.get(0).getName();
-            }
+            List<Student> students = studentRepository.searchActiveByRegNo(occupiedRegNo);
+            if (!students.isEmpty()) occupiedStudentName = students.get(0).getName();
         }
 
         return SeatAvailabilityResponse.builder()
-                .seatNo(seatNo)
-                .zone(zone)
-                .genderAllowed(genderAllowed)
-                .isAvailable(isAvailable && genderAllowed)
-                .message(message)
+                .seatNo(seatNo).zone(zone).genderAllowed(genderAllowed)
+                .isAvailable(isAvailable && genderAllowed).message(message)
                 .existingBookings(existingBookings)
-                .studentName(occupiedStudentName)
-                .regNo(occupiedRegNo)
-                .occupiedTimeSlot(
-                        occupiedBooking != null
-                                ? occupiedBooking.getStartTime().format(TIME_FMT)
-                                + " - "
-                                + occupiedBooking.getEndTime().format(TIME_FMT)
-                                : null)
-                .bookingDate(
-                        occupiedBooking != null
-                                ? occupiedBooking.getBookingDate().toString()
-                                : null)
+                .studentName(occupiedStudentName).regNo(occupiedRegNo)
+                .occupiedTimeSlot(occupiedBooking != null
+                        ? occupiedBooking.getStartTime().format(TIME_FMT) + " - " + occupiedBooking.getEndTime().format(TIME_FMT)
+                        : null)
+                .bookingDate(occupiedBooking != null ? occupiedBooking.getBookingDate().toString() : null)
                 .build();
     }
 
@@ -158,25 +143,17 @@ public class SeatService {
                     .bookings(bookingInfos).build());
         }
 
-        // Include tenant-configured zone definitions so the UI can render
-        // legend, filters, and colors WITHOUT hardcoded ranges.
         List<SeatFullStatusResponse.ZoneDef> zoneDefs = seatConfig.zonesForCurrentTenant().stream()
                 .map(z -> SeatFullStatusResponse.ZoneDef.builder()
-                        .zoneName(z.getZoneName())
-                        .allowedGender(z.getAllowedGender())
-                        .startSeat(z.getStartSeat())
-                        .endSeat(z.getEndSeat())
-                        .displayOrder(z.getDisplayOrder())
-                        .build())
+                        .zoneName(z.getZoneName()).allowedGender(z.getAllowedGender())
+                        .startSeat(z.getStartSeat()).endSeat(z.getEndSeat())
+                        .displayOrder(z.getDisplayOrder()).build())
                 .toList();
 
         return SeatFullStatusResponse.builder()
-                .totalSeats(seatConfig.getTotalSeats())
-                .occupiedSeats(occupied)
+                .totalSeats(seatConfig.getTotalSeats()).occupiedSeats(occupied)
                 .vacantSeats(seatConfig.getTotalSeats() - occupied)
-                .seats(seats)
-                .zones(zoneDefs)
-                .build();
+                .seats(seats).zones(zoneDefs).build();
     }
 
     @Transactional
@@ -191,7 +168,7 @@ public class SeatService {
             throw new InvalidRequestException("Student " + request.getRegNo() + " is inactive.");
 
         LocalTime startTime = LocalTime.parse(request.getStartTime(), TIME_FMT);
-        LocalTime endTime = LocalTime.parse(request.getEndTime(), TIME_FMT);
+        LocalTime endTime   = LocalTime.parse(request.getEndTime(),   TIME_FMT);
         validateTimeRange(startTime, endTime);
 
         int seatNo = request.getSeatNo();
@@ -211,22 +188,18 @@ public class SeatService {
         SeatBooking booking = SeatBooking.builder()
                 .seatNo(seatNo).regNo(request.getRegNo()).gender(student.getGender())
                 .startTime(startTime).endTime(endTime)
-                .bookingMonth(today.getMonthValue()).bookingYear(today.getYear()).bookingDate(today)
-                .build();
+                .bookingMonth(today.getMonthValue()).bookingYear(today.getYear())
+                .bookingDate(today).build();
 
         SeatBooking saved = seatBookingRepository.save(booking);
 
         return SeatAllotResponse.builder()
                 .message("Seat allotted successfully!")
-                .bookingId(saved.getBookingId())
-                .seatNo(saved.getSeatNo())
-                .zone(seatConfig.getZoneLabel(seatNo))
-                .regNo(saved.getRegNo())
-                .studentName(student.getName())
-                .gender(student.getGender())
+                .bookingId(saved.getBookingId()).seatNo(saved.getSeatNo())
+                .zone(seatConfig.getZoneLabel(seatNo)).regNo(saved.getRegNo())
+                .studentName(student.getName()).gender(student.getGender())
                 .timeSlot(request.getStartTime() + " - " + request.getEndTime())
-                .bookingDate(saved.getBookingDate().toString())
-                .build();
+                .bookingDate(saved.getBookingDate().toString()).build();
     }
 
     @Transactional
@@ -242,11 +215,88 @@ public class SeatService {
 
         return CancelBookingResponse.builder()
                 .message("Booking cancelled successfully.")
-                .bookingId(bookingId)
-                .seatNo(booking.getSeatNo())
-                .regNo(booking.getRegNo())
-                .studentName(studentName)
+                .bookingId(bookingId).seatNo(booking.getSeatNo())
+                .regNo(booking.getRegNo()).studentName(studentName)
                 .freedSlot(booking.getStartTime().format(TIME_FMT) + " - " + booking.getEndTime().format(TIME_FMT))
+                .build();
+    }
+
+    @Transactional
+    public ChangeSeatResponse changeSeat(ChangeSeatRequest request) {
+
+        log.info("Changing seat: regNo={}, newSeatNo={}", request.getRegNo(), request.getNewSeatNo());
+
+        // 1. Validate student exists and is active
+        Student student = studentRepository.findById(request.getRegNo())
+                .orElseThrow(() -> new StudentNotFoundException("Student " + request.getRegNo() + " not found."));
+
+        if (!student.getIsActive())
+            throw new InvalidRequestException("Cannot change seat for inactive student " + request.getRegNo());
+
+        // 2. Find the student's existing booking matching their registered time slot
+        List<SeatBooking> bookings = seatBookingRepository
+                .findByRegNoOrderBySeatNoAscStartTimeAsc(request.getRegNo());
+
+        if (bookings.isEmpty())
+            throw new InvalidRequestException(
+                    "Student " + request.getRegNo() + " has no active seat booking. Use Allot Seat instead.");
+
+        // Match booking to student's registered in/out time
+        LocalTime studentIn  = student.getInTime();
+        LocalTime studentOut = student.getOutTime();
+
+        SeatBooking booking = bookings.stream()
+                .filter(b -> b.getStartTime().equals(studentIn) && b.getEndTime().equals(studentOut))
+                .findFirst()
+                .orElse(bookings.get(0)); // fallback to first if no exact match
+
+        int oldSeatNo = booking.getSeatNo();
+        int newSeatNo = request.getNewSeatNo();
+
+        // 3. Same seat check
+        if (oldSeatNo == newSeatNo)
+            throw new InvalidRequestException(
+                    "New seat (" + newSeatNo + ") is the same as the current seat. No change needed.");
+
+        // 4. Validate new seat bounds
+        if (newSeatNo < 1 || newSeatNo > seatConfig.getTotalSeats())
+            throw new InvalidRequestException(
+                    "Seat must be between 1 and " + seatConfig.getTotalSeats());
+
+        // 5. Validate gender zone rule for new seat
+        if (!seatConfig.isGenderAllowedOnSeat(newSeatNo, student.getGender()))
+            throw new InvalidRequestException(
+                    "Seat " + newSeatNo + " (" + seatConfig.getZoneLabel(newSeatNo) + ") is not allowed for " + student.getGender());
+
+        // 6. Check new seat availability for the SAME time slot
+        boolean conflict = seatBookingRepository
+                .existsBySeatNoAndStartTimeLessThanAndEndTimeGreaterThan(
+                        newSeatNo, booking.getEndTime(), booking.getStartTime());
+
+        if (conflict)
+            throw new InvalidRequestException(
+                    "Seat " + newSeatNo + " is already booked for " +
+                    booking.getStartTime().format(TIME_FMT) + " - " + booking.getEndTime().format(TIME_FMT));
+
+        // 7. Atomic UPDATE in place — student is never left without a seat
+        String oldZone = seatConfig.getZoneLabel(oldSeatNo);
+        String newZone = seatConfig.getZoneLabel(newSeatNo);
+        booking.setSeatNo(newSeatNo);
+        seatBookingRepository.save(booking);
+
+        log.info("Seat changed: regNo={}, {} → {}", request.getRegNo(), oldSeatNo, newSeatNo);
+
+        return ChangeSeatResponse.builder()
+                .message("Seat changed successfully! " + student.getName() +
+                         " moved from Seat " + oldSeatNo + " to Seat " + newSeatNo)
+                .regNo(request.getRegNo())
+                .studentName(student.getName())
+                .oldSeatNo(oldSeatNo)
+                .newSeatNo(newSeatNo)
+                .oldZone(oldZone)
+                .newZone(newZone)
+                .timeSlot(booking.getStartTime().format(TIME_FMT) + " - " + booking.getEndTime().format(TIME_FMT))
+                .changedOn(LocalDate.now().toString())
                 .build();
     }
 
@@ -259,44 +309,20 @@ public class SeatService {
 
         List<StudentBookingDetail> details = bookings.stream()
                 .map(b -> StudentBookingDetail.builder()
-                        .bookingId(b.getBookingId())
-                        .seatNo(b.getSeatNo())
+                        .bookingId(b.getBookingId()).seatNo(b.getSeatNo())
                         .zone(seatConfig.getZoneLabel(b.getSeatNo()))
                         .timeSlot(b.getStartTime().format(TIME_FMT) + " - " + b.getEndTime().format(TIME_FMT))
-                        .bookingDate(b.getBookingDate().toString())
-                        .build())
+                        .bookingDate(b.getBookingDate().toString()).build())
                 .toList();
 
         return StudentBookingsResponse.builder()
-                .regNo(regNo)
-                .studentName(student.getName())
-                .gender(student.getGender())
-                .isActive(student.getIsActive())
-                .totalBookings(details.size())
-                .bookings(details)
-                .build();
+                .regNo(regNo).studentName(student.getName()).gender(student.getGender())
+                .isActive(student.getIsActive()).totalBookings(details.size())
+                .bookings(details).build();
     }
 
-    public Object getSeatAvailability(
-            String gender,
-            LocalTime inTime,
-            LocalTime outTime,
-            Integer seatNo) {
-
-        // If seatNo given → specific seat check
-        if (seatNo != null) {
-            return checkSeatAvailability(
-                    seatNo,
-                    gender,
-                    inTime,
-                    outTime
-            );
-        }
-        // Otherwise → all vacant seats
-        return getVacantSeats(
-                gender,
-                inTime,
-                outTime
-        );
+    public Object getSeatAvailability(String gender, LocalTime inTime, LocalTime outTime, Integer seatNo) {
+        if (seatNo != null) return checkSeatAvailability(seatNo, gender, inTime, outTime);
+        return getVacantSeats(gender, inTime, outTime);
     }
 }
