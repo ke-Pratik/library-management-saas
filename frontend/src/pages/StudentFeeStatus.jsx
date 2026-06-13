@@ -2,7 +2,7 @@ import { useState } from "react";
 import { getStudentFeeStatus, searchStudents } from "../services/api";
 import { toast } from "react-toastify";
 
-// ── Date formatter: ISO "2026-05-01" → "01-May-2026" ──
+// ── "01-May-2026" formatter ──────────────────────────
 const formatDate = (iso) => {
   if (!iso) return "—";
   try {
@@ -17,21 +17,39 @@ const formatDate = (iso) => {
   }
 };
 
+// ── "Jun-2026" formatter ─────────────────────────────
+const formatFeeMonth = (month, year) => {
+  if (!month || !year) return "—";
+  const d = new Date(year, month - 1, 1);
+  return d.toLocaleString("en-US", { month: "short" }) + "-" + year;
+};
+
+// ── Payment mode badge ───────────────────────────────
+const paymentModeBadge = (mode) => {
+  if (!mode) return <span className="text-muted">—</span>;
+  const map = {
+    CASH:          { bg: "bg-success",            label: "💵 Cash" },
+    UPI:           { bg: "bg-primary",            label: "📱 UPI" },
+    ONLINE:        { bg: "bg-info",               label: "🌐 Online" },
+    CHEQUE:        { bg: "bg-warning text-dark",  label: "🏦 Cheque" },
+    BANK_TRANSFER: { bg: "bg-secondary",          label: "🔁 Bank Transfer" },
+  };
+  const cfg = map[mode.toUpperCase()] || { bg: "bg-secondary", label: mode };
+  return <span className={`badge ${cfg.bg}`}>{cfg.label}</span>;
+};
+
 function StudentFeeStatus() {
-  const [searchType, setSearchType]     = useState("name");
-  const [searchValue, setSearchValue]   = useState("");
+  const [searchType,    setSearchType]    = useState("name");
+  const [searchValue,   setSearchValue]   = useState("");
   const [searchResults, setSearchResults] = useState(null);
   const [searchLoading, setSearchLoading] = useState(false);
 
-  const [data, setData]       = useState(null);
+  const [data,    setData]    = useState(null);
   const [loading, setLoading] = useState(false);
 
   const handleSearch = async (e) => {
     e.preventDefault();
-    if (!searchValue.trim()) {
-      toast.error("Enter search value");
-      return;
-    }
+    if (!searchValue.trim()) { toast.error("Enter search value"); return; }
     setSearchLoading(true);
     setSearchResults(null);
     setData(null);
@@ -83,6 +101,7 @@ function StudentFeeStatus() {
     <div>
       <h2 className="page-title">📋 Student Details</h2>
 
+      {/* ── Search form ── */}
       <div className="form-section col-lg-8 mb-4">
         <h5 className="fw-bold mb-3">🔍 Find Student</h5>
         <form onSubmit={handleSearch} className="row g-2">
@@ -100,9 +119,11 @@ function StudentFeeStatus() {
               className="form-control"
               placeholder={
                 searchType === "regNo"  ? "Enter Reg No..."  :
-                searchType === "mobile" ? "Enter mobile..." : "Type student name..."
+                searchType === "mobile" ? "Enter mobile..."  : "Type student name..."
               }
-              value={searchValue} onChange={(e) => setSearchValue(e.target.value)} />
+              value={searchValue}
+              onChange={(e) => setSearchValue(e.target.value)}
+            />
           </div>
           <div className="col-md-3">
             <button type="submit" className="btn btn-primary w-100" disabled={searchLoading}>
@@ -111,11 +132,15 @@ function StudentFeeStatus() {
           </div>
         </form>
 
+        {/* ── Search results picker ── */}
         {searchResults && searchResults.length > 0 && (
           <div className="table-responsive mt-3">
             <table className="table table-sm table-hover">
               <thead className="table-dark">
-                <tr><th>Reg No</th><th>Name</th><th>Father</th><th>Mobile</th><th>Time</th><th>Select</th></tr>
+                <tr>
+                  <th>Reg No</th><th>Name</th><th>Father</th>
+                  <th>Mobile</th><th>Time</th><th>Select</th>
+                </tr>
               </thead>
               <tbody>
                 {searchResults.map((s) => (
@@ -142,6 +167,7 @@ function StudentFeeStatus() {
 
       {data && (
         <div>
+          {/* ── Student info card ── */}
           <div className="card shadow-sm border-0 mb-4 col-lg-10">
             <div className="card-body">
               <div className="d-flex justify-content-between align-items-start">
@@ -151,12 +177,14 @@ function StudentFeeStatus() {
                     {data.gender} &nbsp;|&nbsp; 📱 {data.mobile}
                   </p>
                 </div>
-                <button className="btn btn-sm btn-outline-secondary" onClick={handleReset}>🔄 Search Again</button>
+                <button className="btn btn-sm btn-outline-secondary" onClick={handleReset}>
+                  🔄 Search Again
+                </button>
               </div>
 
               <hr />
 
-              {/* Info row (4 cards) */}
+              {/* Info row — 4 cards */}
               <div className="row g-3 text-center">
                 <div className="col-md-3">
                   <div className="border rounded p-2">
@@ -186,7 +214,7 @@ function StudentFeeStatus() {
 
               <hr />
 
-              {/* Fee summary row (5 cards) */}
+              {/* Fee summary row — 5 cards */}
               <div className="row g-2 text-center">
                 <div className="col-md col-6">
                   <div className="border rounded p-2">
@@ -226,13 +254,14 @@ function StudentFeeStatus() {
             </div>
           </div>
 
-          {/* Monthly records */}
+          {/* ── Monthly fee records table ── */}
           {data.monthlyRecords && data.monthlyRecords.length > 0 ? (
             <div className="table-responsive col-lg-10">
               <table className="table table-custom table-hover">
                 <thead>
                   <tr>
-                    <th>Date</th>
+                    <th>Fee Month</th>
+                    <th>Payment Date</th>
                     <th>Slot</th>
                     <th>Monthly Fee</th>
                     <th>Discount</th>
@@ -241,24 +270,34 @@ function StudentFeeStatus() {
                     <th>Paid</th>
                     <th>Balance</th>
                     <th>Status</th>
+                    <th>Payment Mode</th>
                     <th>Receipt</th>
                   </tr>
                 </thead>
                 <tbody>
                   {data.monthlyRecords.map((r, i) => (
                     <tr key={i} className={
-                      r.paymentStatus === "PAID" ? "table-success" :
+                      r.paymentStatus === "PAID"    ? "table-success" :
                       r.paymentStatus === "PARTIAL" ? "table-warning" : ""
                     }>
-                      <td className="fw-bold">{formatDate(r.joiningDateInMonth)}</td>
+                      {/* Fee Month — e.g. "Jun-2026" */}
+                      <td className="fw-bold">{formatFeeMonth(r.feeMonth, r.feeYear)}</td>
+
+                      {/* Payment Date — actual date money was received */}
+                      <td>{formatDate(r.paymentDate)}</td>
+
                       <td>{r.inTime} - {r.outTime}</td>
                       <td>₹{r.monthlyFee}</td>
                       <td>{r.discountAmount > 0 ? `₹${r.discountAmount}` : "—"}</td>
-                      <td>{r.admissionFee > 0 ? `₹${r.admissionFee}` : "—"}</td>
+                      <td>{r.admissionFee  > 0 ? `₹${r.admissionFee}`  : "—"}</td>
                       <td className="fw-bold">₹{r.finalFee}</td>
                       <td className="text-success">₹{r.paidAmount}</td>
                       <td className="text-danger fw-bold">₹{r.balanceAmount}</td>
                       <td>{statusBadge(r.paymentStatus)}</td>
+
+                      {/* Payment Mode — coloured badge */}
+                      <td>{paymentModeBadge(r.paymentMode)}</td>
+
                       <td><small className="text-muted">{r.receiptNumber || "—"}</small></td>
                     </tr>
                   ))}
