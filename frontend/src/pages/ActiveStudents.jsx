@@ -22,6 +22,10 @@ function ActiveStudents() {
   // ── Filters ─────────────────────────────────────────
   const [feeStatusFilter, setFeeStatusFilter] = useState("ALL");
   const [genderFilter,    setGenderFilter]    = useState("ALL");
+
+  // ── Sorting ──────────────────────────────────────────
+  const [sortBy,    setSortBy]    = useState("regNo");
+  const [sortOrder, setSortOrder] = useState("asc");
   const [counts, setCounts] = useState({
     total: 0, maleCount: 0, femaleCount: 0,
     paidCount: 0, partialCount: 0, duesCount: 0,
@@ -51,13 +55,14 @@ function ActiveStudents() {
   const [slotTarget, setSlotTarget] = useState(null);
   const [detailsTarget, setDetailsTarget] = useState(null);
 
-  // ── Fetch students with filters ─────────────────────
-  const fetchStudents = useCallback(async (pageNum, gender, feeStatus) => {
+  // ── Fetch students with filters + sort ──────────────
+  const fetchStudents = useCallback(async (pageNum, gender, feeStatus, sort, order) => {
     setLoading(true);
     try {
       const res = await getActiveStudents({
         page: pageNum, size: PAGE_SIZE,
         genderFilter: gender, feeStatusFilter: feeStatus,
+        sortBy: sort, sortOrder: order,
       });
       setStudents(res.data.students);
       setTotalElements(res.data.totalElements);
@@ -80,8 +85,8 @@ function ActiveStudents() {
   }, []);
 
   useEffect(() => {
-    fetchStudents(page, genderFilter, feeStatusFilter);
-  }, [page, genderFilter, feeStatusFilter, fetchStudents]);
+    fetchStudents(page, genderFilter, feeStatusFilter, sortBy, sortOrder);
+  }, [page, genderFilter, feeStatusFilter, sortBy, sortOrder, fetchStudents]);
 
   useEffect(() => { fetchCounts(); }, [fetchCounts]);
 
@@ -99,6 +104,13 @@ function ActiveStudents() {
   };
   const handleGenderFilter = (value) => {
     setGenderFilter(value);
+    setPage(0);
+  };
+
+  const handleSortChange = (e) => {
+    const [newSortBy, newSortOrder] = e.target.value.split("_");
+    setSortBy(newSortBy);
+    setSortOrder(newSortOrder);
     setPage(0);
   };
 
@@ -124,7 +136,7 @@ function ActiveStudents() {
       });
       toast.success(res.data.message || "Student deactivated");
       closeDeactivate();
-      fetchStudents(page, genderFilter, feeStatusFilter);
+      fetchStudents(page, genderFilter, feeStatusFilter, sortBy, sortOrder);
       fetchCounts();
     } catch (err) {
       toast.error(err.response?.data?.message || "Failed to deactivate");
@@ -177,7 +189,7 @@ function ActiveStudents() {
       });
       toast.success(res.data.message || "Student updated");
       setEditSuccess(true);
-      fetchStudents(page, genderFilter, feeStatusFilter);
+      fetchStudents(page, genderFilter, feeStatusFilter, sortBy, sortOrder);
     } catch (err) {
       toast.error(err.response?.data?.message || "Failed to update student");
     } finally {
@@ -221,7 +233,7 @@ function ActiveStudents() {
         )}
       </h2>
 
-      {/* ── FILTER PILLS ─────────────────────────────── */}
+      {/* ── FILTER PILLS + SORT ──────────────────────── */}
       <div className="mb-3 p-3 bg-light rounded border">
         <div className="mb-2">
           <strong className="me-2 small text-muted">Fee Status:</strong>
@@ -230,11 +242,27 @@ function ActiveStudents() {
           <FilterPill active={feeStatusFilter === "PARTIAL"} onClick={() => handleFeeStatusFilter("PARTIAL")}>🔶 Partial ({counts.partialCount})</FilterPill>
           <FilterPill active={feeStatusFilter === "DUES"}    onClick={() => handleFeeStatusFilter("DUES")}>🔴 Dues ({counts.duesCount})</FilterPill>
         </div>
-        <div>
-          <strong className="me-2 small text-muted">Gender:</strong>
-          <FilterPill active={genderFilter === "ALL"}    onClick={() => handleGenderFilter("ALL")}>● All ({counts.total})</FilterPill>
-          <FilterPill active={genderFilter === "Male"}   onClick={() => handleGenderFilter("Male")}>♂ Male ({counts.maleCount})</FilterPill>
-          <FilterPill active={genderFilter === "Female"} onClick={() => handleGenderFilter("Female")}>♀ Female ({counts.femaleCount})</FilterPill>
+        <div className="d-flex flex-wrap align-items-center gap-3">
+          <div>
+            <strong className="me-2 small text-muted">Gender:</strong>
+            <FilterPill active={genderFilter === "ALL"}    onClick={() => handleGenderFilter("ALL")}>● All ({counts.total})</FilterPill>
+            <FilterPill active={genderFilter === "Male"}   onClick={() => handleGenderFilter("Male")}>♂ Male ({counts.maleCount})</FilterPill>
+            <FilterPill active={genderFilter === "Female"} onClick={() => handleGenderFilter("Female")}>♀ Female ({counts.femaleCount})</FilterPill>
+          </div>
+          <div className="d-flex align-items-center gap-2 ms-auto">
+            <strong className="small text-muted text-nowrap">Sort By:</strong>
+            <select
+              className="form-select form-select-sm"
+              style={{ width: "auto", minWidth: "180px" }}
+              value={`${sortBy}_${sortOrder}`}
+              onChange={handleSortChange}
+            >
+              <option value="regNo_asc">Reg No ↑ (low → high)</option>
+              <option value="regNo_desc">Reg No ↓ (high → low)</option>
+              <option value="seatNo_asc">Seat No ↑ (low → high)</option>
+              <option value="seatNo_desc">Seat No ↓ (high → low)</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -494,7 +522,7 @@ function ActiveStudents() {
           student={slotTarget}
           onClose={() => setSlotTarget(null)}
           onSaved={() => {
-            fetchStudents(page, genderFilter, feeStatusFilter);
+            fetchStudents(page, genderFilter, feeStatusFilter, sortBy, sortOrder);
             fetchCounts();
           }}
         />
