@@ -2,6 +2,7 @@ package com.studycenter.dto;
 
 import lombok.Data;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 @Data
@@ -9,26 +10,42 @@ public class OnboardingRequest {
     private Integer totalSeats;
     private String operatingHoursStart;          // "HH:mm"
     private String operatingHoursEnd;            // "HH:mm"
-    private Boolean hasBoysZone;                 // retained for UI symmetry / reports
+    private Boolean hasBoysZone;
     private Boolean hasGirlsZone;
     private Boolean hasCommonZone;
     private String currencySymbol;
     private String timezone;
 
     /**
-     * Explicit zone layout. Each zone defines a contiguous seat range and an
-     * optional gender restriction. Ranges should cover [1..totalSeats] without
-     * gaps for a fully-bookable library, but the backend does NOT enforce
-     * exhaustive coverage - only that ranges are valid and do not overlap.
+     * Fallback hourly fee (₹ per hour).
+     * Used when no matching slot exists in fee_structure for a student's inTime/outTime.
+     */
+    private BigDecimal hourlyFee;
+
+    /**
+     * Explicit slot-based fee overrides.
+     * Each slot defines a specific inTime-outTime pair with a fixed monthly fee.
+     */
+    private List<FeeSlotDefinition> feeSlots;
+
+    /**
+     * Seat zone layout. Ranges must cover [1..totalSeats] without gaps.
      */
     private List<ZoneDefinition> zones;
 
     @Data
     public static class ZoneDefinition {
-        private String zoneName;        // BOYS_ONLY | GIRLS_ONLY | COMMON | <custom>
-        private String allowedGender;   // "Male" | "Female" | null/empty (any)
+        private String zoneName;
+        private String allowedGender;   // "Male" | "Female" | null (any)
         private Integer startSeat;
         private Integer endSeat;
-        private Integer displayOrder;   // optional; defaults to insertion order
+        private Integer displayOrder;
+    }
+
+    @Data
+    public static class FeeSlotDefinition {
+        private String inTime;          // "HH:mm"
+        private String outTime;         // "HH:mm"
+        private BigDecimal feeAmount;   // monthly fee for this slot
     }
 }
