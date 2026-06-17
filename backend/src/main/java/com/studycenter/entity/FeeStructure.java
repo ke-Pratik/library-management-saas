@@ -2,10 +2,7 @@ package com.studycenter.entity;
 
 import com.studycenter.tenancy.TenantContext;
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 import java.math.BigDecimal;
 import java.time.LocalTime;
@@ -39,12 +36,17 @@ public class FeeStructure {
     private BigDecimal feeAmount;
 
     @Column(name = "is_active")
-    private Boolean isActive;
+    @Builder.Default
+    private Boolean isActive = true;
 
     @PrePersist
     void prePersist() {
-        if (tenantId == null && TenantContext.getTenantId() != null) {
-            tenantId = TenantContext.getTenantId();
+        // Only auto-set tenantId if not explicitly provided (e.g. via builder)
+        if (tenantId == null) {
+            tenantId = TenantContext.requireTenantId();
+        }
+        if (isActive == null) {
+            isActive = true;
         }
     }
 }
