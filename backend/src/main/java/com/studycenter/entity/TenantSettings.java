@@ -3,6 +3,7 @@ package com.studycenter.entity;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.UUID;
@@ -45,6 +46,10 @@ public class TenantSettings {
 
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+
+    /** Per-hour fallback fee when no exact slot match found in fee_structure */
+    @Column(name = "hourly_fee", precision = 10, scale = 2)
+    private BigDecimal hourlyFee;
 
     /** Next reg_no to assign for this tenant. Incremented atomically on each registration. */
     @Builder.Default

@@ -18,6 +18,7 @@ import com.studycenter.entity.FeeRecord;
 import com.studycenter.entity.FeeStructure;
 import com.studycenter.entity.Student;
 import com.studycenter.entity.StudentFeeConfig;
+import com.studycenter.entity.TenantSettings;
 import com.studycenter.exception.InvalidRequestException;
 import com.studycenter.exception.StudentNotFoundException;
 import com.studycenter.entity.SeatBooking;
@@ -29,6 +30,8 @@ import com.studycenter.repository.FeeRecordRepository;
 import com.studycenter.repository.FeeStructureRepository;
 import com.studycenter.repository.StudentFeeConfigRepository;
 import com.studycenter.repository.StudentRepository;
+import com.studycenter.repository.TenantSettingsRepository;
+import com.studycenter.tenancy.TenantContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -60,7 +63,7 @@ import com.studycenter.repository.PaymentAllocationRepository;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-@Transactional(readOnly = true)    
+@Transactional(readOnly = true)
 public class FeeService {
 
     private final FeeStructureRepository feeStructureRepository;
@@ -72,10 +75,11 @@ public class FeeService {
     private final AdjustmentService       adjustmentService;
     private final WalletService           walletService;
     private final PaymentAllocationRepository paymentAllocationRepository;
+    private final TenantSettingsRepository tenantSettingsRepository;
 
     private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("HH:mm");
     private static final int TOTAL_SEATS = 65;
-   
+
 
     // ═══════════════════════════════════════════════════════════════════
     // INTERNAL: Core fee calculation
@@ -110,14 +114,17 @@ public class FeeService {
             monthlyFee = mapped.get().getFeeAmount();
             slotName   = mapped.get().getSlotName();
             calcMethod = "MAPPED (from fee structure)";
-        } else if (totalHours == 4) {
-            monthlyFee = new BigDecimal("500.00");
-            slotName   = "Custom 4-Hour Slot";
-            calcMethod = "DEFAULT_4HR (unmapped 4hr = Rs.500)";
         } else {
-            monthlyFee = BigDecimal.valueOf(totalHours * 100);
+            TenantSettings settings = tenantSettingsRepository
+                    .findById(TenantContext.requireTenantId())
+                    .orElseThrow(() -> new InvalidRequestException(
+                            "Tenant settings not found. Please complete onboarding first."));
+            BigDecimal hourlyRate = settings.getHourlyFee() != null
+                    ? settings.getHourlyFee()
+                    : BigDecimal.valueOf(100); // safe fallback if somehow null
+            monthlyFee = hourlyRate.multiply(BigDecimal.valueOf(totalHours));
             slotName   = "Custom " + totalHours + "-Hour Slot";
-            calcMethod = "HOURLY (" + totalHours + " hrs x Rs.100)";
+            calcMethod = "HOURLY (" + totalHours + " hrs x Rs." + hourlyRate + ")";
         }
 
         if (monthlyDiscount.compareTo(monthlyFee) > 0)
@@ -409,9 +416,9 @@ public class FeeService {
             .findByRegNoAndEffectiveToDateIsNull(regNo)
             .map(StudentFeeConfig::getDiscountAmount)
             .orElse(BigDecimal.ZERO);
-    BigDecimal walletBalance = student.getWalletBalance() != null 
+    BigDecimal walletBalance = student.getWalletBalance() != null
     ? student.getWalletBalance() : BigDecimal.ZERO;
-   
+
 
     return StudentFeeStatusResponse.builder()
             .regNo(regNo).studentName(student.getName()).gender(student.getGender())
@@ -569,7 +576,7 @@ public FeeCollectionResponse getCollectionByDateRange(LocalDate startDate, Local
             .totalOutstandingDues(BigDecimal.ZERO)
             .build();
 }
-    
+
     // ═══════════════════════════════════════════════════════════════════
     // ENHANCEMENT #2: GENERATE ALL FEES FOR A MONTH (unchanged)
     // ═══════════════════════════════════════════════════════════════════
@@ -751,7 +758,7 @@ public FeeCollectionResponse getCollectionByDateRange(LocalDate startDate, Local
         long count = feeRecordRepository.countReceiptsByMonthAndYear(month, year);
         return String.format("REC-%d-%02d-%03d", year, month, count + 1);
     }
-    
+
     // ─── E7: Get receipt by receipt number ───────────────────────────────────
 public ReceiptResponse getReceipt(String receiptNumber) {
     FeeRecord record = feeRecordRepository.findByReceiptNumber(receiptNumber)
@@ -869,15 +876,6 @@ public ReviseFeeResponse reviseFee(Long feeId, ReviseFeeRequest req) {
     adjustmentService.persist(fr, AdjustmentService.Type.DISCOUNT_REVISED,
             oldVals, adjustmentService.snapshot(fr), req.getReason(), adminUser);
 
-   /* return ReviseFeeResponse.builder()
-        .message("Fee revised successfully")
-        .feeId(feeId).regNo(fr.getRegNo())
-        .oldFinalFee(oldFinal).newFinalFee(newFinalFee)
-        .oldBalance(oldBalance).newBalance(newBalance)
-        .oldStatus(oldStatus).newStatus(newStatus)
-        .walletCreditAdded(walletCredit)
-        .overpaidNote(overpaidNote)
-        .build();*/
     // ── Next-month bill (monthly fee unchanged, just new discount applied) ──
 BigDecimal nextMonthFee = fr.getMonthlyFee().subtract(newDiscFullMonth)
     .setScale(2, RoundingMode.HALF_UP);
@@ -902,8 +900,14 @@ private BigDecimal resolveMonthlyFee(LocalTime inTime, LocalTime outTime) {
     Optional<FeeStructure> mapped = feeStructureRepository.findByInTimeAndOutTimeAndIsActiveTrue(inTime, outTime);
     if (mapped.isPresent()) return mapped.get().getFeeAmount();
     long hrs = Duration.between(inTime, outTime).toHours();
-    if (hrs == 4) return new BigDecimal("500.00");
-    return BigDecimal.valueOf(hrs * 100);
+    TenantSettings settings = tenantSettingsRepository
+            .findById(TenantContext.requireTenantId())
+            .orElseThrow(() -> new InvalidRequestException(
+                    "Tenant settings not found. Please complete onboarding first."));
+    BigDecimal hourlyRate = settings.getHourlyFee() != null
+            ? settings.getHourlyFee()
+            : BigDecimal.valueOf(100);
+    return hourlyRate.multiply(BigDecimal.valueOf(hrs));
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -959,7 +963,7 @@ public SlotChangeResponse changeSlotForMonth(SlotChangeRequest req) {
     int oldDays = Math.max(0, changeDay - dojDay);
     // Student uses new slot from change day → end of month
     int newDays = totalDays - changeDay + 1;
-  
+
     BigDecimal oldMonthlyFee = fr.getMonthlyFee();
     // Old full-month discount inferred from prorated discount
     BigDecimal oldDiscFull = fr.getApplicableDays() > 0
@@ -1055,20 +1059,6 @@ public SlotChangeResponse changeSlotForMonth(SlotChangeRequest req) {
     adjustmentService.persist(fr, AdjustmentService.Type.SLOT_CHANGED,
         oldVals, adjustmentService.snapshot(fr), req.getReason(), adminUser);
 
-    /*return SlotChangeResponse.builder()
-        .message(assignedSeatNo != null
-            ? "Slot changed. Seat " + assignedSeatNo + " reallotted."
-            : "Slot changed. Manual seat re-allotment required.")
-        .feeId(fr.getFeeId()).regNo(regNo)
-        .changeDay(changeDay).oldDays(oldDays).newDays(newDays)
-        .oldUsedFee(oldUsedFee).newRemainingFee(newRemainingFee)
-        .admissionFee(admissionFee).revisedFinalFee(revisedFinal)
-        .paidAmount(fr.getPaidAmount()).newBalance(newBalance)
-        .newStatus(newStatus)
-        .walletCreditAdded(walletCredit).overpaidNote(overpaidNote)
-        .assignedSeatNo(assignedSeatNo)
-        .previousDuesWarning(warnings.isEmpty() ? null : warnings)
-        .build();*/
     // ── Next-month bill at new slot rate ──
 BigDecimal nextMonthFee = newMonthly.subtract(newDiscount)
     .setScale(2, RoundingMode.HALF_UP);
@@ -1226,5 +1216,5 @@ public StudentFeeConfig getActiveConfig(Long regNo) {
             "No active fee config found for student " + regNo));
 }
 
-    
+
 }
