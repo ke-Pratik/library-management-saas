@@ -9,7 +9,13 @@ import java.time.LocalDate;
 public class TenantPaymentRequest {
     private BigDecimal amount;
     private LocalDate paidOn;
-    private int monthsToExtend;
+
+    /** Number of months to extend. Used only when validUntilOverride is null. */
+    private Integer monthsToExtend;
+
+    /** Optional manual "Valid Until" date. When provided, overrides months-based calculation. */
+    private LocalDate validUntilOverride;
+
     private String paymentMode;
     private String note;
 }

@@ -24,19 +24,22 @@ import java.time.LocalDate;
 @RequiredArgsConstructor
 public class AuthService {
 
+    /** Free-trial length given to brand-new tenants at signup. */
+    private static final int TRIAL_DAYS = 5;
+
     private final TenantRepository tenantRepository;
     private final TenantSettingsRepository tenantSettingsRepository;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
     private final JdbcTemplate jdbc;
+    private final SubscriptionService subscriptionService;
 
     @Transactional
     public SignupResponse signup(SignupRequest r) {
         if (tenantRepository.findByOwnerEmail(r.getOwnerEmail()).isPresent()) {
             throw new RuntimeException("Email already registered");
         }
-        // Username is globally unique (used as a login identifier on its own)
         if (userRepository.findByUsername(r.getUsername()).isPresent()) {
             throw new RuntimeException(
                     "Username '" + r.getUsername() + "' is already taken. Please pick another.");
@@ -48,7 +51,7 @@ public class AuthService {
                 .ownerEmail(r.getOwnerEmail())
                 .ownerMobile(r.getOwnerMobile())
                 .isActive(true)
-                .subscriptionUntil(LocalDate.now().plusDays(30))
+                .subscriptionUntil(LocalDate.now().plusDays(TRIAL_DAYS))   // ← 5-day trial
                 .onboarded(false)
                 .build();
         tenant = tenantRepository.save(tenant);
@@ -122,8 +125,8 @@ public class AuthService {
         if (Boolean.FALSE.equals(tenant.getIsActive())) {
             throw new RuntimeException("Account suspended. Contact administrator.");
         }
-        if (tenant.getSubscriptionUntil() != null
-                && tenant.getSubscriptionUntil().isBefore(LocalDate.now())) {
+        // ── 5-day grace period (login allowed up to subscriptionUntil + 5 days) ──
+        if (!subscriptionService.isLoginAllowed(tenant)) {
             throw new RuntimeException("Subscription expired. Contact administrator.");
         }
         if (!Boolean.TRUE.equals(user.getIsActive())) {
