@@ -17,13 +17,28 @@ const MONTH_NAMES   = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oc
 const SEAT_COLORS    = ["#dc3545", "#198754"];
 const PAYMENT_COLORS = ["#198754", "#0d6efd"];
 
-const fmt    = (n) => Number(n || 0).toLocaleString("en-IN");
-const pad    = (n) => String(n).padStart(2, "0");
+const fmt     = (n) => Number(n || 0).toLocaleString("en-IN");
+const pad     = (n) => String(n).padStart(2, "0");
 const fmtDate = (d) => (d ? new Date(d).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—");
 
-function SubscriptionCard({ sub, onClick }) {
+/**
+ * Show subscription card on Dashboard ONLY when action is needed:
+ *  - EXPIRING_SOON (≤7 days)
+ *  - GRACE_PERIOD (already expired, inside 5-day grace)
+ *  - TRIAL with ≤7 days remaining
+ * Otherwise (healthy ACTIVE / healthy TRIAL) → hide. The navbar chip is enough.
+ */
+function shouldShowCard(sub) {
+  if (!sub) return false;
+  if (sub.status === "EXPIRING_SOON") return true;
+  if (sub.status === "GRACE_PERIOD")  return true;
+  if (sub.status === "TRIAL" && (sub.daysRemaining ?? 999) <= 7) return true;
+  return false;
+}
+
+function SubscriptionCard({ sub, onClick, onClose }) {
   if (!sub) return null;
-  const { status, validUntil, daysRemaining, expiredOn, graceDaysRemaining, isTrial } = sub;
+  const { status, validUntil, daysRemaining, expiredOn, graceDaysRemaining } = sub;
 
   const meta = {
     TRIAL:         { icon: "🆓", title: "Free Trial",    accent: "border-info",    text: "text-info" },
@@ -36,12 +51,21 @@ function SubscriptionCard({ sub, onClick }) {
   return (
     <div
       className={`card shadow-sm border-start border-4 ${meta.accent} h-100`}
-      style={{ cursor: "pointer" }}
+      style={{ cursor: "pointer", position: "relative" }}
       onClick={onClick}
       title="View full subscription details"
     >
+      {/* Dismiss button — stops click propagation so card click doesn't fire */}
+      <button
+        type="button"
+        className="btn-close position-absolute"
+        aria-label="Dismiss"
+        style={{ top: 10, right: 10, fontSize: 12 }}
+        onClick={(e) => { e.stopPropagation(); onClose && onClose(); }}
+      />
+
       <div className="card-body">
-        <div className="d-flex justify-content-between align-items-center mb-2">
+        <div className="d-flex justify-content-between align-items-center mb-2 pe-4">
           <h6 className="fw-bold mb-0">💳 Subscription</h6>
           <span className={`fw-bold ${meta.text}`}>{meta.icon} {meta.title}</span>
         </div>
@@ -68,6 +92,7 @@ function Dashboard() {
   const [todayData,    setTodayData]    = useState({});
   const [monthlyTrend, setMonthlyTrend] = useState([]);
   const [subscription, setSubscription] = useState(null);
+  const [subDismissed, setSubDismissed] = useState(false);   // ← NEW
   const [loading,      setLoading]      = useState(true);
 
   const fetchDashboard = async () => {
@@ -128,6 +153,9 @@ function Dashboard() {
       </div>
     );
 
+  // ── Show subscription card ONLY when status needs attention ──
+  const showSubCard = shouldShowCard(subscription) && !subDismissed;
+
   return (
     <div>
       {/* ── Header ── */}
@@ -138,10 +166,14 @@ function Dashboard() {
         </button>
       </div>
 
-      {/* ── Subscription Card (NEW) ── */}
-      {subscription && (
+      {/* ── Subscription Card (smart conditional) ── */}
+      {showSubCard && (
         <div className="mb-4">
-          <SubscriptionCard sub={subscription} onClick={() => navigate("/profile")} />
+          <SubscriptionCard
+            sub={subscription}
+            onClick={() => navigate("/profile#subscription")}
+            onClose={() => setSubDismissed(true)}
+          />
         </div>
       )}
 
