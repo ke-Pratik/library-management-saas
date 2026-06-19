@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { getStudentFeeStatus, searchStudents } from "../services/api";
 import { toast } from "react-toastify";
+import ReviseFeeModal from "../components/ReviseFeeModal";
 
 // ── "01-May-2026" formatter ──────────────────────────
 const formatDate = (iso) => {
@@ -46,6 +47,17 @@ function StudentFeeStatus() {
 
   const [data,    setData]    = useState(null);
   const [loading, setLoading] = useState(false);
+
+  // ── NEW: Revise fee modal state ──
+  const [reviseTarget, setReviseTarget] = useState(null);
+
+  const refreshAfterRevise = async () => {
+    if (!data?.regNo) return;
+    try {
+      const res = await getStudentFeeStatus(data.regNo);
+      setData(res.data);
+    } catch {}
+  };
 
   const handleSearch = async (e) => {
     e.preventDefault();
@@ -272,6 +284,7 @@ function StudentFeeStatus() {
                     <th>Status</th>
                     <th>Payment Mode</th>
                     <th>Receipt</th>
+                    <th>Revise</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -299,6 +312,17 @@ function StudentFeeStatus() {
                       <td>{paymentModeBadge(r.paymentMode)}</td>
 
                       <td><small className="text-muted">{r.receiptNumber || "—"}</small></td>
+
+                      {/* NEW: Revise button */}
+                      <td>
+                        <button
+                          className="btn btn-sm btn-outline-info"
+                          onClick={() => setReviseTarget(r)}
+                          title="Revise discount or admission fee"
+                        >
+                          ✏️ Revise
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -310,6 +334,15 @@ function StudentFeeStatus() {
             </div>
           )}
         </div>
+      )}
+
+      {/* ── Revise Fee Modal ── */}
+      {reviseTarget && (
+        <ReviseFeeModal
+          feeRecord={reviseTarget}
+          onClose={() => setReviseTarget(null)}
+          onSaved={refreshAfterRevise}
+        />
       )}
     </div>
   );
