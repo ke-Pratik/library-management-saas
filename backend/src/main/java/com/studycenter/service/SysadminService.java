@@ -14,7 +14,6 @@ import com.studycenter.repository.TenantPaymentRepository;
 import com.studycenter.repository.TenantRepository;
 import com.studycenter.repository.UserRepository;
 import com.studycenter.security.JwtUtil;
-import com.studycenter.subscription.SubscriptionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
