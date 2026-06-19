@@ -55,4 +55,17 @@ long countConflictsForSeat(
 
 Optional<SeatBooking> findFirstByRegNoAndBookingMonthAndBookingYear(
     Long regNo, int bookingMonth, int bookingYear);
+
+ @Query(value =
+    "SELECT DISTINCT sb.seat_no FROM seat_bookings sb " +
+    "WHERE sb.start_time < :endTime AND sb.end_time > :startTime " +
+    "AND sb.reg_no != :regNo " +
+    "AND sb.booking_month = :month AND sb.booking_year = :year",
+    nativeQuery = true)
+List<Integer> findBookedSeatNumbersForSlot(
+    @Param("startTime") LocalTime startTime,
+    @Param("endTime")   LocalTime endTime,
+    @Param("regNo")     Long      regNo,
+    @Param("month")     int       month,
+    @Param("year")      int       year);   
 }
