@@ -1,6 +1,6 @@
 package com.studycenter.dto;
 
-import com.studycenter.subscription.SubscriptionStatus;
+import com.studycenter.dto.SubscriptionStatus;
 import lombok.Builder;
 import lombok.Data;
 
