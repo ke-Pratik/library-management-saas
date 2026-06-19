@@ -15,4 +15,7 @@ public class SlotChangeRequest {
     private BigDecimal newDiscount; // default 0
     private String reason;
     private String adminUser;
+
+    /** NEW: User-selected seat for new slot. If null, falls back to auto-reallot. */
+    private Integer targetSeatNo;
 }

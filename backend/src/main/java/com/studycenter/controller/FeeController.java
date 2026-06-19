@@ -37,6 +37,7 @@ import com.studycenter.dto.AdvancePaymentResponse;
 import com.studycenter.entity.StudentFeeConfig;
 import java.util.List;
 import com.studycenter.entity.StudentFeeConfig;
+import com.studycenter.dto.SlotChangePreviewResponse;
 
 @RestController
 @RequestMapping("/api/fees")
@@ -145,6 +146,11 @@ public ResponseEntity<ReviseFeeResponse> reviseFee(
 public ResponseEntity<List<FeeAdjustment>> getAdjustments(@PathVariable Long feeId) {
     return ResponseEntity.ok(adjustmentService.getForFee(feeId));
 }
+
+@PostMapping("/slot-change/preview")
+public ResponseEntity<SlotChangePreviewResponse> slotChangePreview(@Valid @RequestBody SlotChangeRequest request) {
+    return ResponseEntity.ok(feeService.previewSlotChange(request));
+}    
 
 @PostMapping("/slot-change")
 public ResponseEntity<SlotChangeResponse> slotChange(@Valid @RequestBody SlotChangeRequest request) {
