@@ -38,11 +38,16 @@ public class TenantPayment {
     @Column(name = "note")
     private String note;
 
+    /** TRUE when admin manually entered a Valid Until date instead of using months-based calc */
+    @Column(name = "is_manual_override", nullable = false)
+    private Boolean isManualOverride;
+
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
     @PrePersist
     void prePersist() {
         if (createdAt == null) createdAt = LocalDateTime.now();
+        if (isManualOverride == null) isManualOverride = Boolean.FALSE;
     }
 }
