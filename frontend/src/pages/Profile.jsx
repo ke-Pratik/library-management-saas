@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { getMyProfile, getMySubscription } from "../services/api";
 
 const fmtDate = (d) => (d ? new Date(d).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—");
@@ -28,6 +29,7 @@ function Profile() {
   const [profile, setProfile] = useState(null);
   const [sub, setSub]         = useState(null);
   const [loading, setLoading] = useState(true);
+  const location = useLocation();   // ← NEW
 
   useEffect(() => {
     Promise.all([getMyProfile(), getMySubscription()])
@@ -38,6 +40,19 @@ function Profile() {
       .catch(() => { /* handled below */ })
       .finally(() => setLoading(false));
   }, []);
+
+  // ── NEW: Scroll to subscription section if URL hash is #subscription ──
+  useEffect(() => {
+    if (loading) return;
+    if (location.hash === "#subscription") {
+      setTimeout(() => {
+        document.getElementById("subscription-card")
+          ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 100);
+    } else {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }, [location.hash, location.key, loading]);   // ← location.key fires even on same-route clicks
 
   if (loading) {
     return (
@@ -91,7 +106,7 @@ function Profile() {
 
         {/* ── Subscription Card ── */}
         <div className="col-12">
-          <div className="card border-0 shadow-sm">
+          <div id="subscription-card" className="card border-0 shadow-sm">   {/* ← NEW id */}
             <div className="card-body">
               <div className="d-flex justify-content-between align-items-center mb-3">
                 <h6 className="fw-bold mb-0">💳 Subscription Status</h6>
