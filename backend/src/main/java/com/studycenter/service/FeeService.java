@@ -63,6 +63,7 @@ import com.studycenter.entity.PaymentAllocation;
 import com.studycenter.repository.PaymentAllocationRepository;
 import com.studycenter.repository.TenantSeatZoneRepository;
 import com.studycenter.entity.TenantSeatZone;
+import com.studycenter.dto.ReviseFeePreviewResponse;
 
 @Service
 @RequiredArgsConstructor
