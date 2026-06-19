@@ -76,6 +76,7 @@ export const getReceipt = (receiptNumber) => API.get(`/fees/receipt/${receiptNum
 export const reviseFee = (feeId, data) => API.put(`/fees/${feeId}/revise`, data);
 export const getFeeAdjustments = (feeId) => API.get(`/fees/${feeId}/adjustments`);
 export const slotChange = (data) => API.post(`/fees/slot-change`, data);
+export const slotChangePreview  = (data) => API.post(`/fees/slot-change/preview`, data);
 export const advancePayment = (data) => API.post(`/fees/advance-payment`, data);
 export const getWallet = (regNo) => API.get(`/students/${regNo}/wallet`);
 export const getWalletTx = (regNo) => API.get(`/students/${regNo}/wallet/transactions`);
