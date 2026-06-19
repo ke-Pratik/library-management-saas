@@ -14,6 +14,7 @@ import com.studycenter.repository.TenantPaymentRepository;
 import com.studycenter.repository.TenantRepository;
 import com.studycenter.repository.UserRepository;
 import com.studycenter.security.JwtUtil;
+import com.studycenter.subscription.SubscriptionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -21,6 +22,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -35,6 +37,7 @@ public class SysadminService {
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
     private final JdbcTemplate jdbc;
+    private final SubscriptionService subscriptionService;
 
     private void bindTenant(UUID tenantId) {
         jdbc.execute("SET LOCAL app.current_tenant = '" + tenantId + "'");
@@ -55,18 +58,34 @@ public class SysadminService {
 
     public List<TenantSummary> listTenants() {
         return tenantRepository.findAll().stream()
-                .map(t -> TenantSummary.builder()
-                        .id(t.getId())
-                        .libraryName(t.getLibraryName())
-                        .ownerName(t.getOwnerName())
-                        .ownerEmail(t.getOwnerEmail())
-                        .ownerMobile(t.getOwnerMobile())
-                        .isActive(t.getIsActive())
-                        .subscriptionUntil(t.getSubscriptionUntil())
-                        .onboarded(t.getOnboarded())
-                        .createdAt(t.getCreatedAt())
-                        .build())
+                .map(this::toSummary)
                 .toList();
+    }
+
+    /** NEW: single-tenant fetch for the dedicated tenant management page. */
+    public TenantSummary getTenant(UUID tenantId) {
+        Tenant t = tenantRepository.findById(tenantId)
+                .orElseThrow(() -> new RuntimeException("Tenant not found"));
+        return toSummary(t);
+    }
+
+    private TenantSummary toSummary(Tenant t) {
+        SubscriptionService.Snapshot snap = subscriptionService.computeFor(t);
+        return TenantSummary.builder()
+                .id(t.getId())
+                .libraryName(t.getLibraryName())
+                .ownerName(t.getOwnerName())
+                .ownerEmail(t.getOwnerEmail())
+                .ownerMobile(t.getOwnerMobile())
+                .isActive(t.getIsActive())
+                .subscriptionUntil(t.getSubscriptionUntil())
+                .onboarded(t.getOnboarded())
+                .createdAt(t.getCreatedAt())
+                .subscriptionStatus(snap.getStatus())
+                .daysRemaining(snap.getDaysRemaining())
+                .isTrial(snap.isTrial())
+                .effectiveExpiryDate(snap.getEffectiveExpiryDate())
+                .build();
     }
 
     @Transactional
@@ -83,17 +102,45 @@ public class SysadminService {
                 .orElseThrow(() -> new RuntimeException("Tenant not found"));
         bindTenant(tenantId);
 
+        // ── Validate inputs ──
+        if (r.getAmount() == null || r.getAmount().signum() <= 0) {
+            throw new RuntimeException("Amount must be greater than 0");
+        }
+        if (r.getPaidOn() == null) {
+            throw new RuntimeException("Payment date is required");
+        }
+
+        LocalDate extendsTo;
+        boolean isManualOverride;
+
+        if (r.getValidUntilOverride() != null) {
+            // Manual override path
+            if (!r.getValidUntilOverride().isAfter(r.getPaidOn())) {
+                throw new RuntimeException("Valid Until must be after the Payment Date");
+            }
+            extendsTo        = r.getValidUntilOverride();
+            isManualOverride = true;
+        } else {
+            // Months-based calculation path
+            if (r.getMonthsToExtend() == null || r.getMonthsToExtend() <= 0) {
+                throw new RuntimeException("Either 'Months to Extend' or 'Valid Until' is required");
+            }
+            extendsTo        = r.getPaidOn().plusMonths(r.getMonthsToExtend());
+            isManualOverride = false;
+        }
+
         TenantPayment p = TenantPayment.builder()
                 .tenantId(tenantId)
                 .amount(r.getAmount())
                 .paidOn(r.getPaidOn())
-                .extendsTo(r.getPaidOn().plusMonths(r.getMonthsToExtend()))
+                .extendsTo(extendsTo)
                 .paymentMode(r.getPaymentMode())
                 .note(r.getNote())
+                .isManualOverride(isManualOverride)
                 .build();
         p = tenantPaymentRepository.save(p);
 
-        t.setSubscriptionUntil(p.getExtendsTo());
+        t.setSubscriptionUntil(extendsTo);
         tenantRepository.save(t);
         return p;
     }
