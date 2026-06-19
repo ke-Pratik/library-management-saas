@@ -4,7 +4,6 @@ import { FaBook, FaUserCircle } from "react-icons/fa";
 import { useAuth } from "../context/AuthContext";
 import { getMySubscription } from "../services/api";
 
-/** Status chip colour + label */
 function statusChip(sub) {
   if (!sub) return null;
   const fmt = (d) => (d ? new Date(d).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—");
@@ -35,11 +34,10 @@ function Navbar() {
     let mounted = true;
     getMySubscription()
       .then((res) => { if (mounted) setSub(res.data); })
-      .catch(() => { /* silent — chip just hides */ });
+      .catch(() => {});
     return () => { mounted = false; };
   }, []);
 
-  // close on outside click
   useEffect(() => {
     const handler = (e) => {
       if (menuRef.current && !menuRef.current.contains(e.target)) setOpen(false);
@@ -48,9 +46,19 @@ function Navbar() {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  const handleLogout = () => {
-    logout();
-    navigate("/login");
+  const handleLogout = () => { logout(); navigate("/login"); };
+
+  // ── Always force-navigate so location.key changes → Profile.jsx re-scrolls ──
+  const goProfile = () => {
+    setOpen(false);
+    navigate("/profile", { replace: false });
+  };
+  const goSubscription = () => {
+    setOpen(false);
+    navigate("/profile#subscription", { replace: false });
+  };
+  const goChip = () => {
+    navigate("/profile#subscription", { replace: false });
   };
 
   const chip = statusChip(sub);
@@ -63,19 +71,17 @@ function Navbar() {
       </span>
 
       <div className="d-flex align-items-center gap-3" ref={menuRef}>
-        {/* Subscription Chip */}
         {chip && (
           <span
             className={`badge ${chip.bg} ${chip.text} px-3 py-2`}
             style={{ cursor: "pointer", fontWeight: 500 }}
-            onClick={() => navigate("/profile")}
+            onClick={goChip}
             title="View subscription details"
           >
             {chip.label}
           </span>
         )}
 
-        {/* User Dropdown */}
         <div className="position-relative">
           <button
             className="btn btn-sm text-light d-flex align-items-center gap-2"
@@ -104,27 +110,18 @@ function Navbar() {
                 <div className="small text-muted">{role || "—"}</div>
               </li>
               <li>
-                <button
-                  className="dropdown-item"
-                  onClick={() => { setOpen(false); navigate("/profile"); }}
-                >
+                <button className="dropdown-item" onClick={goProfile}>
                   👁  My Profile
                 </button>
               </li>
               <li>
-                <button
-                  className="dropdown-item"
-                  onClick={() => { setOpen(false); navigate("/profile"); }}
-                >
+                <button className="dropdown-item" onClick={goSubscription}>
                   💳  Subscription
                 </button>
               </li>
               <li><hr className="dropdown-divider" /></li>
               <li>
-                <button
-                  className="dropdown-item text-danger"
-                  onClick={() => { setOpen(false); handleLogout(); }}
-                >
+                <button className="dropdown-item text-danger" onClick={() => { setOpen(false); handleLogout(); }}>
                   🚪  Logout
                 </button>
               </li>
