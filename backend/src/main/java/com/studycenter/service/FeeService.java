@@ -61,6 +61,8 @@ import com.studycenter.dto.AdvancePaymentRequest;
 import com.studycenter.dto.AdvancePaymentResponse;
 import com.studycenter.entity.PaymentAllocation;
 import com.studycenter.repository.PaymentAllocationRepository;
+import com.studycenter.repository.TenantSeatZoneRepository;
+import com.studycenter.entity.TenantSeatZone;
 
 @Service
 @RequiredArgsConstructor
@@ -78,6 +80,7 @@ public class FeeService {
     private final WalletService           walletService;
     private final PaymentAllocationRepository paymentAllocationRepository;
     private final TenantSettingsRepository tenantSettingsRepository;
+    private final TenantSeatZoneRepository tenantSeatZoneRepository;
 
     private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("HH:mm");
     private static final int TOTAL_SEATS = 65;
@@ -920,7 +923,8 @@ private void validateWithinOperatingHours(LocalTime newIn, LocalTime newOut) {
 // ═══════════════════════════════════════════════════════════════════
 private List<Integer> availableSeatsForSlot(
         LocalTime startTime, LocalTime endTime,
-        int month, int year, Long excludeRegNo) {
+        int month, int year, Long excludeRegNo,
+        String studentGender) {
 
     TenantSettings settings = tenantSettingsRepository
         .findById(TenantContext.requireTenantId())
@@ -931,8 +935,32 @@ private List<Integer> availableSeatsForSlot(
         startTime, endTime, excludeRegNo, month, year);
     Set<Integer> bookedSet = new HashSet<>(booked);
 
+    // ── Build set of seats allowed for this student's gender (via tenant zones) ──
+    List<TenantSeatZone> zones = tenantSeatZoneRepository.findAllByOrderByDisplayOrderAsc();
+    Set<Integer> genderAllowed = new HashSet<>();
+
+    if (zones == null || zones.isEmpty()) {
+        // No zones configured — fall back to "all seats" behaviour (backward compat)
+        for (int s = 1; s <= totalSeats; s++) genderAllowed.add(s);
+    } else {
+        for (TenantSeatZone z : zones) {
+            String zoneGender = z.getAllowedGender();   // "Male" / "Female" / null
+            boolean zoneAllowsStudent =
+                   zoneGender == null                                  // common zone — anyone
+                || studentGender == null                               // student gender unknown — allow all zones
+                || zoneGender.equalsIgnoreCase(studentGender);         // exact match
+
+            if (zoneAllowsStudent && z.getStartSeat() != null && z.getEndSeat() != null) {
+                for (int s = z.getStartSeat(); s <= z.getEndSeat(); s++) {
+                    genderAllowed.add(s);
+                }
+            }
+        }
+    }
+
     return IntStream.rangeClosed(1, totalSeats)
             .filter(s -> !bookedSet.contains(s))
+            .filter(genderAllowed::contains)
             .boxed()
             .collect(Collectors.toList());
 }
@@ -1022,8 +1050,8 @@ public SlotChangePreviewResponse previewSlotChange(SlotChangeRequest req) {
             currentSeatNo, newIn, newOut, regNo, month, year);
         currentSeatAvailable = (conflicts == 0);
     }
-
-    List<Integer> availableSeats = availableSeatsForSlot(newIn, newOut, month, year, regNo);
+    List<Integer> availableSeats = availableSeatsForSlot(
+        newIn, newOut, month, year, regNo, student.getGender());
 
     List<FeeRecord> prevUnpaid = feeRecordRepository.findPreviousUnpaidRecords(regNo, month, year);
     List<String> warnings = prevUnpaid.stream()
