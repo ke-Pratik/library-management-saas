@@ -63,6 +63,7 @@ import com.studycenter.entity.PaymentAllocation;
 import com.studycenter.repository.PaymentAllocationRepository;
 import com.studycenter.repository.TenantSeatZoneRepository;
 import com.studycenter.entity.TenantSeatZone;
+import com.studycenter.dto.ReviseFeePreviewResponse;
 
 @Service
 @RequiredArgsConstructor
@@ -1385,6 +1386,83 @@ public StudentFeeConfig getActiveConfig(Long regNo) {
         .orElseThrow(() -> new InvalidRequestException(
             "No active fee config found for student " + regNo));
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// REVISE FEE — PREVIEW (no DB writes)
+// ═══════════════════════════════════════════════════════════════════
+public ReviseFeePreviewResponse previewReviseFee(Long feeId, ReviseFeeRequest req) {
+
+    FeeRecord fr = feeRecordRepository.findById(feeId)
+        .orElseThrow(() -> new InvalidRequestException("Fee record " + feeId + " not found"));
+
+    int totalDays      = fr.getTotalDaysInMonth();
+    int applicableDays = fr.getApplicableDays();
+    boolean midMonth   = applicableDays > 0 && applicableDays != totalDays;
+
+    // Old monthly discount (derive from stored prorated)
+    BigDecimal oldProratedDisc = fr.getDiscountAmount() != null ? fr.getDiscountAmount() : BigDecimal.ZERO;
+    BigDecimal oldMonthlyDisc  = (applicableDays > 0)
+        ? oldProratedDisc.multiply(BigDecimal.valueOf(totalDays))
+              .divide(BigDecimal.valueOf(applicableDays), 6, RoundingMode.HALF_UP)
+              .setScale(2, RoundingMode.HALF_UP)
+        : BigDecimal.ZERO;
+
+    // Effective new values — keep existing if null
+    BigDecimal newDiscFullMonth = req.getNewDiscount() != null
+        ? req.getNewDiscount()
+        : oldMonthlyDisc;
+
+    BigDecimal newAdm = req.getNewAdmissionFee() != null
+        ? req.getNewAdmissionFee()
+        : fr.getAdmissionFee();
+
+    if (newDiscFullMonth.compareTo(fr.getMonthlyFee()) > 0)
+        throw new InvalidRequestException("Discount cannot exceed monthly fee");
+
+    // Recalculate with original proration
+    BigDecimal perDayFee  = fr.getMonthlyFee().divide(BigDecimal.valueOf(totalDays), 6, RoundingMode.HALF_UP);
+    BigDecimal perDayDisc = newDiscFullMonth.divide(BigDecimal.valueOf(totalDays), 6, RoundingMode.HALF_UP);
+
+    BigDecimal newProrated     = perDayFee.multiply(BigDecimal.valueOf(applicableDays)).setScale(2, RoundingMode.HALF_UP);
+    BigDecimal newProratedDisc = perDayDisc.multiply(BigDecimal.valueOf(applicableDays)).setScale(2, RoundingMode.HALF_UP);
+    BigDecimal newFinalFee     = newProrated.subtract(newProratedDisc).add(newAdm).setScale(2, RoundingMode.HALF_UP);
+    if (newFinalFee.signum() < 0) newFinalFee = BigDecimal.ZERO;
+
+    BigDecimal newBalance   = newFinalFee.subtract(fr.getPaidAmount()).setScale(2, RoundingMode.HALF_UP);
+    BigDecimal walletCredit = BigDecimal.ZERO;
+    if (newBalance.signum() < 0) {
+        walletCredit = newBalance.abs();
+        newBalance = BigDecimal.ZERO;
+    }
+
+    String newStatus = determineStatus(fr.getPaidAmount(), newFinalFee);
+
+    BigDecimal nextMonthFee = fr.getMonthlyFee().subtract(newDiscFullMonth)
+        .setScale(2, RoundingMode.HALF_UP);
+    if (nextMonthFee.signum() < 0) nextMonthFee = BigDecimal.ZERO;
+
+    return ReviseFeePreviewResponse.builder()
+        .feeId(feeId).regNo(fr.getRegNo())
+        .oldMonthlyDiscount(oldMonthlyDisc)
+        .oldProratedDiscount(oldProratedDisc)
+        .oldAdmissionFee(fr.getAdmissionFee())
+        .oldFinalFee(fr.getFinalFee())
+        .oldBalance(fr.getBalanceAmount())
+        .oldStatus(fr.getPaymentStatus())
+        .newMonthlyDiscount(newDiscFullMonth)
+        .newProratedDiscount(newProratedDisc)
+        .newAdmissionFee(newAdm)
+        .newFinalFee(newFinalFee)
+        .newBalance(newBalance)
+        .newStatus(newStatus)
+        .walletCreditAdded(walletCredit)
+        .monthlyFee(fr.getMonthlyFee())
+        .nextMonthFee(nextMonthFee)
+        .isMidMonth(midMonth)
+        .totalDaysInMonth(totalDays)
+        .applicableDays(applicableDays)
+        .build();
+}    
 
 
 }
