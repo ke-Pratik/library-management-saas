@@ -48,17 +48,13 @@ function Navbar() {
 
   const handleLogout = () => { logout(); navigate("/login"); };
 
-  // ── Always force-navigate so location.key changes → Profile.jsx re-scrolls ──
   const goProfile = () => {
     setOpen(false);
-    navigate("/profile", { replace: false });
+    navigate("/profile");
   };
-  const goSubscription = () => {
-    setOpen(false);
-    navigate("/profile#subscription", { replace: false });
-  };
+
   const goChip = () => {
-    navigate("/profile#subscription", { replace: false });
+    navigate("/profile#subscription");
   };
 
   const chip = statusChip(sub);
@@ -71,6 +67,7 @@ function Navbar() {
       </span>
 
       <div className="d-flex align-items-center gap-3" ref={menuRef}>
+        {/* Subscription status chip — clickable, jumps to subscription card */}
         {chip && (
           <span
             className={`badge ${chip.bg} ${chip.text} px-3 py-2`}
@@ -82,6 +79,7 @@ function Navbar() {
           </span>
         )}
 
+        {/* User dropdown — Profile + Logout only */}
         <div className="position-relative">
           <button
             className="btn btn-sm text-light d-flex align-items-center gap-2"
@@ -114,14 +112,12 @@ function Navbar() {
                   👁  My Profile
                 </button>
               </li>
-              <li>
-                <button className="dropdown-item" onClick={goSubscription}>
-                  💳  Subscription
-                </button>
-              </li>
               <li><hr className="dropdown-divider" /></li>
               <li>
-                <button className="dropdown-item text-danger" onClick={() => { setOpen(false); handleLogout(); }}>
+                <button
+                  className="dropdown-item text-danger"
+                  onClick={() => { setOpen(false); handleLogout(); }}
+                >
                   🚪  Logout
                 </button>
               </li>
