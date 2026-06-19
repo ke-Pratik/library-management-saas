@@ -1,5 +1,6 @@
 package com.studycenter.dto;
 
+import com.studycenter.subscription.SubscriptionStatus;
 import lombok.Builder;
 import lombok.Data;
 
@@ -19,4 +20,10 @@ public class TenantSummary {
     private LocalDate subscriptionUntil;
     private Boolean onboarded;
     private LocalDateTime createdAt;
+
+    // ── NEW: computed subscription fields ──
+    private SubscriptionStatus subscriptionStatus;
+    private Integer daysRemaining;
+    private Boolean isTrial;
+    private LocalDate effectiveExpiryDate;
 }
