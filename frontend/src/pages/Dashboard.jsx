@@ -1,9 +1,11 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   getStudentSummary,
   getSeatStatus,
   getMonthlyCollection,
   getCollectionByRange,
+  getMySubscription,
 } from "../services/api";
 import { FaUsers, FaChair, FaQuestionCircle, FaCalendarDay } from "react-icons/fa";
 import {
@@ -15,15 +17,49 @@ const MONTH_NAMES   = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oc
 const SEAT_COLORS    = ["#dc3545", "#198754"];
 const PAYMENT_COLORS = ["#198754", "#0d6efd"];
 
-const fmt = (n) => Number(n || 0).toLocaleString("en-IN");
-const pad = (n) => String(n).padStart(2, "0");
+const fmt    = (n) => Number(n || 0).toLocaleString("en-IN");
+const pad    = (n) => String(n).padStart(2, "0");
+const fmtDate = (d) => (d ? new Date(d).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—");
+
+function SubscriptionCard({ sub, onClick }) {
+  if (!sub) return null;
+  const { status, validUntil, daysRemaining, expiredOn, graceDaysRemaining, isTrial } = sub;
+
+  const meta = {
+    TRIAL:         { icon: "🆓", title: "Free Trial",    accent: "border-info",    text: "text-info" },
+    ACTIVE:        { icon: "🟢", title: "Active",         accent: "border-success", text: "text-success" },
+    EXPIRING_SOON: { icon: "🟡", title: "Expiring Soon",  accent: "border-warning", text: "text-warning" },
+    GRACE_PERIOD:  { icon: "🟠", title: "Grace Period",   accent: "border-warning", text: "text-warning" },
+    EXPIRED:       { icon: "🔴", title: "Expired",        accent: "border-danger",  text: "text-danger" },
+  }[status] || { icon: "💳", title: status, accent: "border-secondary", text: "text-secondary" };
+
+  return (
+    <div
+      className={`card shadow-sm border-start border-4 ${meta.accent} h-100`}
+      style={{ cursor: "pointer" }}
+      onClick={onClick}
+      title="View full subscription details"
+    >
+      <div className="card-body">
+        <div className="d-flex justify-content-between align-items-center mb-2">
+          <h6 className="fw-bold mb-0">💳 Subscription</h6>
+          <span className={`fw-bold ${meta.text}`}>{meta.icon} {meta.title}</span>
+        </div>
+        {status === "TRIAL"         && <div className="small text-muted">Trial ends <strong>{fmtDate(validUntil)}</strong> · <strong>{daysRemaining}</strong> day(s) left</div>}
+        {status === "ACTIVE"        && <div className="small text-muted">Valid until <strong>{fmtDate(validUntil)}</strong> · <strong>{daysRemaining}</strong> day(s) remaining</div>}
+        {status === "EXPIRING_SOON" && <div className="small text-warning">Expires in <strong>{daysRemaining}</strong> day(s) — contact your system administrator for renewal.</div>}
+        {status === "GRACE_PERIOD"  && <div className="small text-danger">Expired on <strong>{fmtDate(expiredOn)}</strong> · grace ends in <strong>{graceDaysRemaining ?? 0}</strong> day(s). Renew to avoid service block.</div>}
+        {status === "EXPIRED"       && <div className="small text-danger">Subscription expired on <strong>{fmtDate(expiredOn)}</strong>. Contact your system administrator.</div>}
+      </div>
+    </div>
+  );
+}
 
 function Dashboard() {
+  const navigate     = useNavigate();
   const now          = new Date();
   const currentMonth = now.getMonth() + 1;
   const currentYear  = now.getFullYear();
-  // FIX: use LOCAL date (IST), not UTC. toISOString() returns UTC and
-  // would roll back to the previous day between midnight and 5:30 AM IST.
   const todayStr     = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 
   const [students,     setStudents]     = useState({});
@@ -31,6 +67,7 @@ function Dashboard() {
   const [collection,   setCollection]   = useState({});
   const [todayData,    setTodayData]    = useState({});
   const [monthlyTrend, setMonthlyTrend] = useState([]);
+  const [subscription, setSubscription] = useState(null);
   const [loading,      setLoading]      = useState(true);
 
   const fetchDashboard = async () => {
@@ -46,6 +83,7 @@ function Dashboard() {
         getSeatStatus(),
         getMonthlyCollection({ month: currentMonth, year: currentYear }),
         getCollectionByRange({ startDate: todayStr, endDate: todayStr }),
+        getMySubscription(),
         ...months.map(({ month, year }) => getMonthlyCollection({ month, year })),
       ]);
 
@@ -53,10 +91,11 @@ function Dashboard() {
       if (results[1].status === "fulfilled") setSeats(results[1].value.data);
       if (results[2].status === "fulfilled") setCollection(results[2].value.data);
       if (results[3].status === "fulfilled") setTodayData(results[3].value.data);
+      if (results[4].status === "fulfilled") setSubscription(results[4].value.data);
 
       const trend = months.map(({ month, year }, idx) => ({
         label:      `${MONTH_NAMES[month - 1]} '${String(year).slice(2)}`,
-        collection: Number(results[idx + 4]?.value?.data?.totalCollected || 0),
+        collection: Number(results[idx + 5]?.value?.data?.totalCollected || 0),
       }));
       setMonthlyTrend(trend);
     } catch (err) {
@@ -98,6 +137,13 @@ function Dashboard() {
           🔄 Refresh
         </button>
       </div>
+
+      {/* ── Subscription Card (NEW) ── */}
+      {subscription && (
+        <div className="mb-4">
+          <SubscriptionCard sub={subscription} onClick={() => navigate("/profile")} />
+        </div>
+      )}
 
       {/* ── Dues Alert ── */}
       {studentsWithDues > 0 && (
@@ -204,7 +250,6 @@ function Dashboard() {
       {/* ── Row 2: This Month Financial Summary + Payment Mode Donut ── */}
       <div className="row g-4 mb-4">
 
-        {/* This Month */}
         <div className="col-lg-8">
           <div className="card border-0 shadow-sm h-100">
             <div className="card-body">
@@ -213,7 +258,6 @@ function Dashboard() {
               </h6>
               <div className="row g-3">
 
-                {/* Billed */}
                 <div className="col-md-4">
                   <div className="p-3 rounded bg-light text-center">
                     <div className="text-muted small mb-1">Billed This Month</div>
@@ -224,7 +268,6 @@ function Dashboard() {
                   </div>
                 </div>
 
-                {/* Cash Received */}
                 <div className="col-md-4">
                   <div className="p-3 rounded bg-light text-center">
                     <div className="text-muted small mb-1">Cash Received</div>
@@ -239,7 +282,6 @@ function Dashboard() {
                   </div>
                 </div>
 
-                {/* Outstanding */}
                 <div className="col-md-4">
                   <div className="p-3 rounded bg-light text-center">
                     <div className="text-muted small mb-1">Total Outstanding</div>
@@ -259,7 +301,6 @@ function Dashboard() {
           </div>
         </div>
 
-        {/* Payment Mode Donut */}
         <div className="col-lg-4">
           <div className="card border-0 shadow-sm h-100">
             <div className="card-body">
@@ -270,15 +311,8 @@ function Dashboard() {
                 <>
                   <ResponsiveContainer width="100%" height={170}>
                     <PieChart>
-                      <Pie
-                        data={paymentPieData}
-                        cx="50%" cy="50%"
-                        innerRadius={45} outerRadius={70}
-                        dataKey="value"
-                      >
-                        {paymentPieData.map((_, idx) => (
-                          <Cell key={idx} fill={PAYMENT_COLORS[idx]} />
-                        ))}
+                      <Pie data={paymentPieData} cx="50%" cy="50%" innerRadius={45} outerRadius={70} dataKey="value">
+                        {paymentPieData.map((_, idx) => (<Cell key={idx} fill={PAYMENT_COLORS[idx]} />))}
                       </Pie>
                       <Tooltip formatter={(v) => [`₹${v.toLocaleString("en-IN")}`, ""]} />
                       <Legend iconSize={12} />
@@ -305,7 +339,6 @@ function Dashboard() {
       {/* ── Row 3: Charts ── */}
       <div className="row g-4 mb-4">
 
-        {/* 6-month Bar Chart */}
         <div className="col-lg-8">
           <div className="card border-0 shadow-sm h-100">
             <div className="card-body">
@@ -329,7 +362,6 @@ function Dashboard() {
           </div>
         </div>
 
-        {/* Seat Occupancy Donut */}
         <div className="col-lg-4">
           <div className="card border-0 shadow-sm h-100">
             <div className="card-body">
@@ -340,15 +372,8 @@ function Dashboard() {
                 <>
                   <ResponsiveContainer width="100%" height={210}>
                     <PieChart>
-                      <Pie
-                        data={seatPieData}
-                        cx="50%" cy="50%"
-                        innerRadius={55} outerRadius={85}
-                        dataKey="value"
-                      >
-                        {seatPieData.map((_, idx) => (
-                          <Cell key={idx} fill={SEAT_COLORS[idx]} />
-                        ))}
+                      <Pie data={seatPieData} cx="50%" cy="50%" innerRadius={55} outerRadius={85} dataKey="value">
+                        {seatPieData.map((_, idx) => (<Cell key={idx} fill={SEAT_COLORS[idx]} />))}
                       </Pie>
                       <Tooltip />
                       <Legend iconSize={12} />
