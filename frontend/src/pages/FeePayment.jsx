@@ -378,7 +378,7 @@ function FeePayment() {
       <h2 className="page-title">💳 Record Payment</h2>
 
       {/* ─── STEP 1: Find Student ─────────────── */}
-      <div className="form-section col-lg-9 mb-4">
+      <div className="form-section mb-4">
         <h5 className="fw-bold mb-2">Step 1: Find Student</h5>
         <p className="text-muted small mb-3">
           Search by Name, Reg No, or Mobile. Current month fee will be auto-generated on selection.
@@ -603,7 +603,7 @@ function FeePayment() {
       </div>
 
       {/* ─── STEP 2: Payment Form ─────────────── */}
-      <div className="form-section col-lg-8 mb-4">
+      <div className="form-section mb-4">
         <h5 className="fw-bold mb-3">Step 2: Make Payment</h5>
         <form onSubmit={handleSubmit}>
           <div className="row g-3">
@@ -697,7 +697,7 @@ function FeePayment() {
 
       {/* ─── PAYMENT RESULT ──────────────────── */}
       {result && (
-        <div className="result-card success col-lg-8">
+        <div className="result-card success">
           <h5 className="fw-bold">✅ {result.message}</h5>
           <table className="table table-sm mt-3">
             <tbody>
