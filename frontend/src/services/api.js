@@ -72,7 +72,7 @@ export const getStudentsWithNoConfig = () => API.get("/fees/no-config");
 export const bulkPayment = (data) => API.post("/fees/bulk-payment", data);
 export const reversePayment = (feeId, data) => API.post(`/fees/reverse/${feeId}`, data);
 export const getReceipt = (receiptNumber) => API.get(`/fees/receipt/${receiptNumber}`);
-
+export const reviseFeePreview = (feeId, data) => API.post(`/fees/${feeId}/revise/preview`, data);
 export const reviseFee = (feeId, data) => API.put(`/fees/${feeId}/revise`, data);
 export const getFeeAdjustments = (feeId) => API.get(`/fees/${feeId}/adjustments`);
 export const slotChange = (data) => API.post(`/fees/slot-change`, data);
