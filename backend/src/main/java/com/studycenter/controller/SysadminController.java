@@ -31,6 +31,12 @@ public class SysadminController {
         return sysadminService.listTenants();
     }
 
+    /** NEW: single-tenant fetch for the dedicated tenant management page. */
+    @GetMapping("/tenants/{id}")
+    public TenantSummary getTenant(@PathVariable("id") UUID id) {
+        return sysadminService.getTenant(id);
+    }
+
     @PostMapping("/tenants/{id}/active")
     public void setActive(@PathVariable("id") UUID id, @RequestBody Map<String, Boolean> body) {
         sysadminService.setActive(id, Boolean.TRUE.equals(body.get("active")));
