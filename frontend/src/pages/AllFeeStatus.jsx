@@ -27,7 +27,7 @@ function AllFeeStatus() {
   const [noConfigData, setNoConfigData]       = useState(null);
   const [noConfigLoading, setNoConfigLoading] = useState(false);
 
-  // ── NEW: Section collapse + Pagination + Create Bills confirmation ──
+  // ── Section collapse + Pagination + Create Bills confirmation ──
   const [setupExpanded, setSetupExpanded] = useState(true);
   const [page, setPage] = useState(0);
   const [showCreateConfirm, setShowCreateConfirm] = useState(false);
@@ -290,34 +290,32 @@ function AllFeeStatus() {
         </div>
       )}
 
-      {/* ── No-config result ── */}
-      {noConfigData && (
-        <div className={`alert mb-4 ${noConfigData.count > 0 ? "alert-danger" : "alert-success"}`}>
+      {/* ── No-config result — render ONLY when there's data to show ── */}
+      {noConfigData && noConfigData.count > 0 && (
+        <div className="alert alert-danger mb-4">
           <h6 className="fw-bold mb-2">⚠️ Students Without Fee Setup</h6>
           <p className="mb-2">{noConfigData.message}</p>
-          {noConfigData.count > 0 && (
-            <div className="table-responsive">
-              <table className="table table-sm mb-0">
-                <thead className="table-dark">
-                  <tr>
-                    <th>Reg No</th><th>Name</th><th>Mobile</th>
-                    <th>Time Slot</th><th>Admission Date</th>
+          <div className="table-responsive">
+            <table className="table table-sm mb-0">
+              <thead className="table-dark">
+                <tr>
+                  <th>Reg No</th><th>Name</th><th>Mobile</th>
+                  <th>Time Slot</th><th>Admission Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {noConfigData.students.map((s) => (
+                  <tr key={s.regNo}>
+                    <td className="fw-bold">{s.regNo}</td>
+                    <td>{s.name}</td>
+                    <td>{s.mobile}</td>
+                    <td>{s.timeSlot || "—"}</td>
+                    <td>{s.dateOfAdmission || "—"}</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {noConfigData.students.map((s) => (
-                    <tr key={s.regNo}>
-                      <td className="fw-bold">{s.regNo}</td>
-                      <td>{s.name}</td>
-                      <td>{s.mobile}</td>
-                      <td>{s.timeSlot || "—"}</td>
-                      <td>{s.dateOfAdmission || "—"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+                ))}
+              </tbody>
+            </table>
+          </div>
           <button className="btn btn-sm btn-outline-secondary mt-2" onClick={() => setNoConfigData(null)}>
             ✕ Dismiss
           </button>
