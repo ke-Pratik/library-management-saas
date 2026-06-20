@@ -12,8 +12,6 @@ body {
 /* Sidebar */
 .sidebar {
   width: 250px;
-  flex-shrink: 0;        /* ← Phase 1 fix: prevent shrinking */
-  min-width: 250px;      /* ← Phase 1 fix: enforce minimum width */
   min-height: calc(100vh - 56px);
   background-color: #1f2937;
   color: #fff;
@@ -49,8 +47,6 @@ body {
 /* Main Content */
 .main-content {
   overflow-y: auto;
-  overflow-x: auto;       /* ← Phase 1: wide content scrolls horizontally */
-  min-width: 0;           /* ← Phase 1: allows proper shrinking */
   max-height: calc(100vh - 56px);
 }
 
@@ -188,83 +184,4 @@ body {
 .navbar-custom {
   background-color: #1f2937 !important;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-/* ═══════════════════════════════════════════════
-   MOBILE RESPONSIVE — Hamburger Menu (Phase 2)
-   Applies only on screens < 768px (phones)
-   ═══════════════════════════════════════════════ */
-
-/* Hamburger button — hidden on desktop, shown on mobile */
-.hamburger-btn {
-  display: none;
-  background: transparent;
-  border: none;
-  color: #fff;
-  font-size: 22px;
-  padding: 4px 10px;
-  cursor: pointer;
-}
-
-/* Sidebar close button — hidden on desktop, shown on mobile */
-.sidebar-close-btn {
-  display: none;
-}
-
-/* Sidebar backdrop overlay — hidden by default */
-.sidebar-backdrop {
-  display: none;
-}
-
-@media (max-width: 768px) {
-  /* Hide sidebar by default on mobile, slide off-screen */
-  .sidebar {
-    position: fixed;
-    top: 56px;                         /* below navbar */
-    left: -280px;                      /* hidden off-screen */
-    height: calc(100vh - 56px);
-    z-index: 1050;
-    box-shadow: 2px 0 12px rgba(0, 0, 0, 0.4);
-    transition: left 0.3s ease;
-  }
-
-  /* When user taps hamburger, sidebar slides in */
-  .sidebar.mobile-open {
-    left: 0;
-  }
-
-  /* Hamburger button visible on mobile */
-  .hamburger-btn {
-    display: inline-block;
-  }
-
-  /* Close button inside sidebar on mobile */
-  .sidebar-close-btn {
-    display: flex;
-    justify-content: flex-end;
-    padding: 8px 16px;
-  }
-
-  /* Backdrop appears when sidebar is open */
-  .sidebar-backdrop.show {
-    display: block;
-    position: fixed;
-    top: 56px;
-    left: 0;
-    width: 100vw;
-    height: calc(100vh - 56px);
-    background: rgba(0, 0, 0, 0.5);
-    z-index: 1049;
-  }
-
-  /* Main content gets full width on mobile (no sidebar pushing) */
-  .main-content {
-    width: 100%;
-    padding: 1rem !important;          /* smaller padding on mobile */
-  }
-
-  /* Navbar brand text — shrink on small screens */
-  .navbar-brand {
-    font-size: 14px !important;
-  }
 }
