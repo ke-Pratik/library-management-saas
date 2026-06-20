@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FaBook, FaUserCircle } from "react-icons/fa";
+import { FaBook, FaUserCircle, FaBars } from "react-icons/fa";
 import { useAuth } from "../context/AuthContext";
 import { getMySubscription } from "../services/api";
 
@@ -23,7 +23,7 @@ function statusChip(sub) {
   }
 }
 
-function Navbar() {
+function Navbar({ onHamburgerClick }) {
   const navigate = useNavigate();
   const { username, role, logout } = useAuth();
   const [open, setOpen] = useState(false);
@@ -47,31 +47,33 @@ function Navbar() {
   }, []);
 
   const handleLogout = () => { logout(); navigate("/login"); };
-
-  const goProfile = () => {
-    setOpen(false);
-    navigate("/profile");
-  };
-
-  const goChip = () => {
-    navigate("/profile#subscription");
-  };
+  const goProfile    = () => { setOpen(false); navigate("/profile"); };
+  const goChip       = () => { navigate("/profile#subscription"); };
 
   const chip = statusChip(sub);
 
   return (
-    <nav className="navbar navbar-dark navbar-custom px-4">
-      <span className="navbar-brand d-flex align-items-center gap-2 fw-bold">
-        <FaBook size={22} />
-        📚 Study Center Management System
-      </span>
+    <nav className="navbar navbar-dark navbar-custom px-3 px-md-4">
+      <div className="d-flex align-items-center gap-2">
+        {/* Hamburger button — hidden on desktop, visible on mobile via CSS */}
+        <button
+          className="hamburger-btn"
+          onClick={onHamburgerClick}
+          aria-label="Open menu"
+        >
+          <FaBars />
+        </button>
+        <span className="navbar-brand d-flex align-items-center gap-2 fw-bold mb-0">
+          <FaBook size={20} />
+          📚 Study Center Management System
+        </span>
+      </div>
 
-      <div className="d-flex align-items-center gap-3" ref={menuRef}>
-        {/* Subscription status chip — clickable, jumps to subscription card */}
+      <div className="d-flex align-items-center gap-2 gap-md-3" ref={menuRef}>
         {chip && (
           <span
-            className={`badge ${chip.bg} ${chip.text} px-3 py-2`}
-            style={{ cursor: "pointer", fontWeight: 500 }}
+            className={`badge ${chip.bg} ${chip.text} px-2 py-2 d-none d-sm-inline`}
+            style={{ cursor: "pointer", fontWeight: 500, fontSize: "12px" }}
             onClick={goChip}
             title="View subscription details"
           >
@@ -79,7 +81,6 @@ function Navbar() {
           </span>
         )}
 
-        {/* User dropdown — Profile + Logout only */}
         <div className="position-relative">
           <button
             className="btn btn-sm text-light d-flex align-items-center gap-2"
@@ -87,7 +88,7 @@ function Navbar() {
             onClick={() => setOpen((o) => !o)}
           >
             <FaUserCircle size={20} />
-            <span className="small">{username || "User"}</span>
+            <span className="small d-none d-md-inline">{username || "User"}</span>
             <span style={{ fontSize: 10 }}>▾</span>
           </button>
 
