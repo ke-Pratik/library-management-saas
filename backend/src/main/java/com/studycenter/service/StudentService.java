@@ -29,6 +29,12 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.studycenter.dto.DeactivatePreviewResponse;
+import com.studycenter.entity.FeeRecord;
+import com.studycenter.repository.FeeRecordRepository;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.YearMonth;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -47,6 +53,8 @@ public class StudentService {
     private final SeatBookingRepository seatBookingRepository;
     private final FeeService            feeService;
     private final JdbcTemplate          jdbc;
+    private final FeeRecordRepository feeRecordRepository;
+    private final WalletService walletService;
 
     private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("HH:mm");
 
@@ -138,31 +146,298 @@ public class StudentService {
                 .build();
     }
 
-    @Transactional
-    public DeactivateReactivateResponse deactivateStudent(DeactivateReactivateRequest request) {
-        Student student = studentRepository.findById(request.getRegNo())
-                .orElseThrow(() -> new StudentNotFoundException("Student " + request.getRegNo() + " not found."));
-        if (!student.getIsActive())
-            throw new InvalidRequestException("Student " + request.getRegNo() + " is already inactive.");
+    // ═══════════════════════════════════════════════════════════════════
+// DEACTIVATE — PREVIEW (no DB writes)
+// ═══════════════════════════════════════════════════════════════════
+public DeactivatePreviewResponse previewDeactivate(DeactivateReactivateRequest req) {
 
-        student.setIsActive(false);
-        student.setDeactivationDate(LocalDate.now());
-        student.setRemarks(request.getRemarks());
-        studentRepository.save(student);
+    Student student = studentRepository.findById(req.getRegNo())
+            .orElseThrow(() -> new StudentNotFoundException("Student " + req.getRegNo() + " not found."));
+    if (!student.getIsActive())
+        throw new InvalidRequestException("Student " + req.getRegNo() + " is already inactive.");
 
-        long cancelled = seatBookingRepository.countByRegNo(request.getRegNo());
-        seatBookingRepository.deleteByRegNo(request.getRegNo());
+    LocalDate today = LocalDate.now();
+    LocalDate lastActive = req.getLastActiveDate() != null ? req.getLastActiveDate() : today;
+    boolean neverUsed = Boolean.TRUE.equals(req.getNeverUsed());
 
-        return DeactivateReactivateResponse.builder()
-                .message("Student deactivated successfully!")
-                .regNo(request.getRegNo())
-                .name(student.getName())
-                .isActive(false)
-                .deactivationDate(LocalDate.now().toString())
-                .remarks(request.getRemarks())
-                .bookingsCancelled((int) cancelled)
+    int month = today.getMonthValue();
+    int year  = today.getYear();
+    int totalDaysInMonth = YearMonth.of(year, month).lengthOfMonth();
+
+    Optional<FeeRecord> optRecord = feeRecordRepository
+            .findByRegNoAndFeeMonthAndFeeYear(req.getRegNo(), month, year);
+
+    DeactivatePreviewResponse.DeactivatePreviewResponseBuilder b = DeactivatePreviewResponse.builder()
+            .regNo(student.getRegNo())
+            .studentName(student.getName())
+            .joiningDate(student.getDateOfAdmission())
+            .lastActiveDate(lastActive)
+            .totalDaysInMonth(totalDaysInMonth);
+
+    // Count future records
+    java.util.List<FeeRecord> all = feeRecordRepository.findByRegNoOrderByFeeYearDescFeeMonthDesc(req.getRegNo());
+    int futureCount = (int) all.stream()
+            .filter(r -> r.getFeeYear() > year || (r.getFeeYear() == year && r.getFeeMonth() > month))
+            .count();
+    b.futureRecordsCount(futureCount);
+
+    // Seat info
+    Integer seatNo = seatBookingRepository
+            .findFirstByRegNoAndBookingMonthAndBookingYear(req.getRegNo(), month, year)
+            .map(SeatBooking::getSeatNo).orElse(null);
+    b.seatToCancel(seatNo);
+
+    if (!optRecord.isPresent()) {
+        return b.hasCurrentMonthRecord(false)
+                .daysUsed(0)
+                .willDeleteRecord(false)
+                .needsBalanceDecision(false)
                 .build();
     }
+
+    FeeRecord fr = optRecord.get();
+    b.hasCurrentMonthRecord(true)
+     .oldFinalFee(fr.getFinalFee())
+     .oldPaid(fr.getPaidAmount())
+     .oldBalance(fr.getBalanceAmount())
+     .oldStatus(fr.getPaymentStatus())
+     .isMidMonthRecord(fr.getApplicableDays() != null
+             && fr.getTotalDaysInMonth() != null
+             && !fr.getApplicableDays().equals(fr.getTotalDaysInMonth()));
+
+    if (neverUsed) {
+        return b.daysUsed(0)
+                .willDeleteRecord(true)
+                .newFinalFee(BigDecimal.ZERO)
+                .newBalance(BigDecimal.ZERO)
+                .newStatus("DELETED")
+                .needsBalanceDecision(false)
+                .build();
+    }
+
+    // Calculate days used (DOJ → lastActive, clamped to current month)
+    LocalDate doj = fr.getJoiningDateInMonth() != null ? fr.getJoiningDateInMonth() : student.getDateOfAdmission();
+    long daysUsed = lastActive.toEpochDay() - doj.toEpochDay() + 1;
+    if (daysUsed < 0) daysUsed = 0;
+    if (daysUsed > totalDaysInMonth) daysUsed = totalDaysInMonth;
+    b.daysUsed((int) daysUsed);
+
+    String feeHandling = req.getFeeHandling() != null ? req.getFeeHandling() : "PRORATE";
+
+    if ("WAIVE".equalsIgnoreCase(feeHandling)) {
+        // Waive: keep finalFee, set balance to 0
+        b.newFinalFee(fr.getFinalFee())
+         .newBalance(BigDecimal.ZERO)
+         .newStatus("PAID")
+         .walletCreditWillAdd(BigDecimal.ZERO)
+         .balanceAfterProRate(BigDecimal.ZERO)
+         .needsBalanceDecision(false)
+         .willDeleteRecord(false);
+        return b.build();
+    }
+
+    // PRORATE path
+    BigDecimal monthlyFee = fr.getMonthlyFee();
+    BigDecimal discount   = fr.getDiscountAmount() != null ? fr.getDiscountAmount() : BigDecimal.ZERO;
+    BigDecimal admission  = fr.getAdmissionFee() != null ? fr.getAdmissionFee() : BigDecimal.ZERO;
+
+    // Pro-rate fee and discount based on daysUsed (relative to applicableDays of original record)
+    int origApplicable = fr.getApplicableDays() != null ? fr.getApplicableDays() : totalDaysInMonth;
+    BigDecimal perDayFee = monthlyFee.divide(BigDecimal.valueOf(totalDaysInMonth), 6, RoundingMode.HALF_UP);
+    // Discount was already pro-rated to applicableDays; convert back to per-day
+    BigDecimal perDayDisc = origApplicable > 0
+            ? discount.divide(BigDecimal.valueOf(origApplicable), 6, RoundingMode.HALF_UP)
+            : BigDecimal.ZERO;
+
+    BigDecimal proratedFee  = perDayFee.multiply(BigDecimal.valueOf(daysUsed)).setScale(2, RoundingMode.HALF_UP);
+    BigDecimal proratedDisc = perDayDisc.multiply(BigDecimal.valueOf(daysUsed)).setScale(2, RoundingMode.HALF_UP);
+    BigDecimal newFinalFee  = proratedFee.subtract(proratedDisc).add(admission).setScale(2, RoundingMode.HALF_UP);
+    if (newFinalFee.signum() < 0) newFinalFee = BigDecimal.ZERO;
+
+    BigDecimal paid = fr.getPaidAmount();
+    BigDecimal newBalance = newFinalFee.subtract(paid).setScale(2, RoundingMode.HALF_UP);
+    BigDecimal walletCredit = BigDecimal.ZERO;
+    boolean needsBalanceDecision = false;
+
+    if (newBalance.signum() < 0) {
+        walletCredit = newBalance.abs();
+        newBalance = BigDecimal.ZERO;
+    } else if (newBalance.signum() > 0) {
+        needsBalanceDecision = true;
+    }
+
+    String newStatus = newBalance.signum() <= 0 ? "PAID" : "PARTIAL";
+
+    return b.newFinalFee(newFinalFee)
+            .newBalance(newBalance)
+            .newStatus(newStatus)
+            .walletCreditWillAdd(walletCredit)
+            .balanceAfterProRate(newBalance)
+            .needsBalanceDecision(needsBalanceDecision)
+            .willDeleteRecord(false)
+            .build();
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// DEACTIVATE — EXECUTE
+// ═══════════════════════════════════════════════════════════════════
+@Transactional
+public DeactivateReactivateResponse deactivateStudent(DeactivateReactivateRequest request) {
+
+    Student student = studentRepository.findById(request.getRegNo())
+            .orElseThrow(() -> new StudentNotFoundException("Student " + request.getRegNo() + " not found."));
+    if (!student.getIsActive())
+        throw new InvalidRequestException("Student " + request.getRegNo() + " is already inactive.");
+
+    LocalDate today = LocalDate.now();
+    LocalDate lastActive = request.getLastActiveDate() != null ? request.getLastActiveDate() : today;
+    boolean neverUsed = Boolean.TRUE.equals(request.getNeverUsed());
+
+    int month = today.getMonthValue();
+    int year  = today.getYear();
+    int totalDaysInMonth = YearMonth.of(year, month).lengthOfMonth();
+
+    Optional<FeeRecord> optRecord = feeRecordRepository
+            .findByRegNoAndFeeMonthAndFeeYear(request.getRegNo(), month, year);
+
+    boolean currentMonthDeleted = false;
+    BigDecimal oldFinalFee  = BigDecimal.ZERO;
+    BigDecimal newFinalFee  = BigDecimal.ZERO;
+    BigDecimal amountCollected = BigDecimal.ZERO;
+    BigDecimal amountWaived  = BigDecimal.ZERO;
+    BigDecimal walletCredit  = BigDecimal.ZERO;
+    String receiptNumber = null;
+
+    // ── Handle current month fee record ──
+    if (optRecord.isPresent()) {
+        FeeRecord fr = optRecord.get();
+        oldFinalFee = fr.getFinalFee();
+
+        if (neverUsed) {
+            // Case 1: Never used → DELETE the record
+            feeRecordRepository.delete(fr);
+            currentMonthDeleted = true;
+        } else {
+            String feeHandling = request.getFeeHandling() != null ? request.getFeeHandling() : "PRORATE";
+
+            if ("WAIVE".equalsIgnoreCase(feeHandling)) {
+                // Waive: keep finalFee, set balance to 0
+                amountWaived = fr.getBalanceAmount() != null ? fr.getBalanceAmount() : BigDecimal.ZERO;
+                fr.setBalanceAmount(BigDecimal.ZERO);
+                fr.setPaymentStatus("PAID");
+                fr.setRemarks((fr.getRemarks() != null ? fr.getRemarks() + " | " : "")
+                        + "WAIVED on deactivation: Rs." + amountWaived);
+                feeRecordRepository.save(fr);
+                newFinalFee = fr.getFinalFee();
+            } else {
+                // PRORATE
+                LocalDate doj = fr.getJoiningDateInMonth() != null ? fr.getJoiningDateInMonth() : student.getDateOfAdmission();
+                long daysUsed = lastActive.toEpochDay() - doj.toEpochDay() + 1;
+                if (daysUsed < 0) daysUsed = 0;
+                if (daysUsed > totalDaysInMonth) daysUsed = totalDaysInMonth;
+
+                BigDecimal monthlyFee = fr.getMonthlyFee();
+                BigDecimal discount   = fr.getDiscountAmount() != null ? fr.getDiscountAmount() : BigDecimal.ZERO;
+                BigDecimal admission  = fr.getAdmissionFee() != null ? fr.getAdmissionFee() : BigDecimal.ZERO;
+                int origApplicable = fr.getApplicableDays() != null ? fr.getApplicableDays() : totalDaysInMonth;
+
+                BigDecimal perDayFee  = monthlyFee.divide(BigDecimal.valueOf(totalDaysInMonth), 6, RoundingMode.HALF_UP);
+                BigDecimal perDayDisc = origApplicable > 0
+                        ? discount.divide(BigDecimal.valueOf(origApplicable), 6, RoundingMode.HALF_UP)
+                        : BigDecimal.ZERO;
+                BigDecimal proratedFee  = perDayFee.multiply(BigDecimal.valueOf(daysUsed)).setScale(2, RoundingMode.HALF_UP);
+                BigDecimal proratedDisc = perDayDisc.multiply(BigDecimal.valueOf(daysUsed)).setScale(2, RoundingMode.HALF_UP);
+                BigDecimal computedFinalFee = proratedFee.subtract(proratedDisc).add(admission).setScale(2, RoundingMode.HALF_UP);
+                if (computedFinalFee.signum() < 0) computedFinalFee = BigDecimal.ZERO;
+
+                BigDecimal paid = fr.getPaidAmount();
+                BigDecimal newBalance = computedFinalFee.subtract(paid).setScale(2, RoundingMode.HALF_UP);
+
+                if (newBalance.signum() < 0) {
+                    // Overpaid → wallet credit
+                    walletCredit = newBalance.abs();
+                    newBalance = BigDecimal.ZERO;
+                    walletService.credit(request.getRegNo(), walletCredit,
+                            WalletService.TxType.CREDIT_FROM_RECALC,
+                            fr.getFeeId(), "Overpaid after deactivation pro-rate", "admin");
+                } else if (newBalance.signum() > 0) {
+                    // Still owes → handle based on balanceAction
+                    String balanceAction = request.getBalanceAction() != null ? request.getBalanceAction() : "WAIVE";
+
+                    if ("COLLECT".equalsIgnoreCase(balanceAction)) {
+                        // Record payment
+                        String mode = request.getCollectMode() != null ? request.getCollectMode().toUpperCase() : "CASH";
+                        if (!"CASH".equals(mode) && !"ONLINE".equals(mode)) mode = "CASH";
+
+                        BigDecimal newPaid = paid.add(newBalance);
+                        receiptNumber = generateDeactivationReceipt(month, year);
+                        fr.setPaidAmount(newPaid);
+                        amountCollected = newBalance;
+                        newBalance = BigDecimal.ZERO;
+                        fr.setPaymentMode(mode);
+                        fr.setPaymentDate(today);
+                        fr.setReceiptNumber(receiptNumber);
+                    } else {
+                        // WAIVE the remaining balance
+                        amountWaived = newBalance;
+                        newBalance = BigDecimal.ZERO;
+                        fr.setRemarks((fr.getRemarks() != null ? fr.getRemarks() + " | " : "")
+                                + "Pro-rate + waived Rs." + amountWaived + " on deactivation");
+                    }
+                }
+
+                // Save the recalculated record
+                fr.setFinalFee(computedFinalFee);
+                fr.setProratedFee(proratedFee);
+                fr.setDiscountAmount(proratedDisc);
+                fr.setApplicableDays((int) daysUsed);
+                fr.setBalanceAmount(newBalance);
+                fr.setPaymentStatus(newBalance.signum() <= 0 ? "PAID" : "PARTIAL");
+                feeRecordRepository.save(fr);
+                newFinalFee = computedFinalFee;
+            }
+        }
+    }
+
+    // ── Delete future-month fee records ──
+    int futureDeleted = feeRecordRepository.deleteFutureRecordsByRegNo(request.getRegNo(), month, year);
+
+    // ── Cancel seat bookings (existing logic) ──
+    long cancelled = seatBookingRepository.countByRegNo(request.getRegNo());
+    seatBookingRepository.deleteByRegNo(request.getRegNo());
+
+    // ── Update student ──
+    student.setIsActive(false);
+    student.setDeactivationDate(today);
+    student.setLastActiveDate(lastActive);
+    student.setRemarks(request.getRemarks());
+    studentRepository.save(student);
+
+    return DeactivateReactivateResponse.builder()
+            .message("Student deactivated successfully!")
+            .regNo(request.getRegNo())
+            .name(student.getName())
+            .isActive(false)
+            .deactivationDate(today.toString())
+            .lastActiveDate(lastActive.toString())
+            .remarks(request.getRemarks())
+            .bookingsCancelled((int) cancelled)
+            .currentMonthDeleted(currentMonthDeleted)
+            .oldFinalFee(oldFinalFee)
+            .newFinalFee(newFinalFee)
+            .amountCollected(amountCollected)
+            .amountWaived(amountWaived)
+            .walletCreditAdded(walletCredit)
+            .receiptNumber(receiptNumber)
+            .futureRecordsDeleted(futureDeleted)
+            .build();
+}
+
+private String generateDeactivationReceipt(Integer month, Integer year) {
+    long count = feeRecordRepository.countReceiptsByMonthAndYear(month, year);
+    return String.format("REC-%d-%02d-%03d", year, month, count + 1);
+}
+
 
     @Transactional
     public DeactivateReactivateResponse reactivateStudent(DeactivateReactivateRequest request) {
