@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from "react";
 import {
   getActiveStudents,
   getActiveStudentsFilterCounts,
-  deactivateStudent,
   getStudentByRegNo,
   editStudent,
 } from "../services/api";
@@ -10,6 +9,7 @@ import { toast } from "react-toastify";
 import SlotChangeModal from "../components/SlotChangeModal";
 import StudentDetailsModal from "../components/StudentDetailsModal";
 import ChangeSeatModal from "../components/ChangeSeatModal";
+import DeactivateModal from "../components/DeactivateModal";
 
 const PAGE_SIZE = 10;
 
@@ -36,11 +36,8 @@ function ActiveStudents() {
   const [openMenuRegNo, setOpenMenuRegNo] = useState(null);
   const [menuPos,       setMenuPos]       = useState({ top: 0, right: 0 });
 
-  // ── Deactivate modal ─────────────────────────────────
-  const [showDeactivate, setShowDeactivate]       = useState(false);
-  const [deactivateTarget, setDeactivateTarget]   = useState(null);
-  const [deactivateRemarks, setDeactivateRemarks] = useState("");
-  const [deactivating, setDeactivating]           = useState(false);
+  // ── Deactivate modal (NEW: simplified — DeactivateModal handles all state) ──
+  const [deactivateTarget, setDeactivateTarget] = useState(null);
 
   // ── Edit modal ───────────────────────────────────────
   const [showEdit, setShowEdit]       = useState(false);
@@ -108,35 +105,15 @@ function ActiveStudents() {
     setPage(0);
   };
 
-  // ── Deactivate handlers ───────────────────────────────
+  // ── Deactivate handlers (NEW: simplified) ─────────────
   const openDeactivate = (s) => {
     setOpenMenuRegNo(null);
     setDeactivateTarget(s);
-    setDeactivateRemarks("");
-    setShowDeactivate(true);
   };
-  const closeDeactivate = () => {
-    if (deactivating) return;
-    setShowDeactivate(false);
-    setDeactivateTarget(null);
-  };
-  const confirmDeactivate = async () => {
-    if (!deactivateTarget) return;
-    setDeactivating(true);
-    try {
-      const res = await deactivateStudent({
-        regNo: deactivateTarget.regNo,
-        remarks: deactivateRemarks.trim() || null,
-      });
-      toast.success(res.data.message || "Student deactivated");
-      closeDeactivate();
-      fetchStudents(page, genderFilter, feeStatusFilter, sortBy, sortOrder);
-      fetchCounts();
-    } catch (err) {
-      toast.error(err.response?.data?.message || "Failed to deactivate");
-    } finally {
-      setDeactivating(false);
-    }
+  const closeDeactivate = () => setDeactivateTarget(null);
+  const onDeactivateDone = () => {
+    fetchStudents(page, genderFilter, feeStatusFilter, sortBy, sortOrder);
+    fetchCounts();
   };
 
   // ── Edit handlers ─────────────────────────────────────
@@ -402,48 +379,13 @@ function ActiveStudents() {
         </ul>
       )}
 
-      {/* ── Deactivate Modal ─────────────────── */}
-      {showDeactivate && (
-        <>
-          <div className="modal-backdrop fade show" onClick={closeDeactivate} />
-          <div className="modal fade show d-block" tabIndex="-1" role="dialog">
-            <div className="modal-dialog modal-dialog-centered" role="document">
-              <div className="modal-content">
-                <div className="modal-header border-danger">
-                  <h5 className="modal-title text-danger fw-bold">🔴 Deactivate Student</h5>
-                  <button type="button" className="btn-close" onClick={closeDeactivate} disabled={deactivating} />
-                </div>
-                <div className="modal-body">
-                  <p className="mb-3">
-                    Are you sure you want to deactivate <strong>{deactivateTarget?.name}</strong>{" "}
-                    <span className="text-muted">(Reg No: {deactivateTarget?.regNo})</span>?
-                  </p>
-                  <div className="alert alert-warning py-2 small mb-3">
-                    ⚠️ This will also <strong>cancel all seat bookings</strong> for this student.
-                  </div>
-                  <label className="form-label fw-semibold">
-                    Reason / Remarks <span className="text-muted fw-normal">(optional)</span>
-                  </label>
-                  <textarea
-                    className="form-control" rows={3}
-                    placeholder="e.g. Left city, completed course..."
-                    value={deactivateRemarks}
-                    onChange={(e) => setDeactivateRemarks(e.target.value)}
-                    disabled={deactivating}
-                  />
-                </div>
-                <div className="modal-footer">
-                  <button className="btn btn-secondary" onClick={closeDeactivate} disabled={deactivating}>Cancel</button>
-                  <button className="btn btn-danger" onClick={confirmDeactivate} disabled={deactivating}>
-                    {deactivating
-                      ? <><span className="spinner-border spinner-border-sm me-2" />Deactivating...</>
-                      : "🔴 Yes, Deactivate"}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </>
+      {/* ── Deactivate Modal (NEW: 2-step wizard) ─────────── */}
+      {deactivateTarget && (
+        <DeactivateModal
+          student={deactivateTarget}
+          onClose={closeDeactivate}
+          onDone={onDeactivateDone}
+        />
       )}
 
       {/* ── Edit Modal ─────────────────────────── */}
