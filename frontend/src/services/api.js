@@ -35,6 +35,7 @@ export const registerStudent = (data) => API.post("/students/register", data);
 export const getActiveStudents = (params) => API.get("/students/active", { params });
 export const getInactiveStudents = () => API.get("/students/inactive");
 export const getStudentSummary = () => API.get("/students/summary");
+export const deactivateStudentPreview = (data) => API.post("/students/deactivate/preview", data);
 export const deactivateStudent = (data) => API.put("/students/deactivate", data);
 export const reactivateStudent = (data) => API.put("/students/reactivate", data);
 export const searchStudents = (type, value) =>
