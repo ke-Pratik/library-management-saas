@@ -17,6 +17,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import com.studycenter.dto.DeactivatePreviewResponse;
 
 import java.util.List;
 
@@ -44,6 +45,11 @@ public class StudentController {
     public ResponseEntity<DeactivateReactivateResponse> reactivate(
             @Valid @RequestBody DeactivateReactivateRequest request) {
         return ResponseEntity.ok(studentService.reactivateStudent(request));
+    }
+    
+    @PostMapping("/deactivate/preview")
+    public ResponseEntity<DeactivatePreviewResponse> previewDeactivate(@RequestBody DeactivateReactivateRequest request) {
+        return ResponseEntity.ok(studentService.previewDeactivate(request));
     }
 
     // ── Active students — paginated with optional filters + sorting ──
