@@ -11,12 +11,6 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.UUID;
 
-/**
- * NOTE: At the database level the primary key is (tenant_id, reg_no) and RLS
- * enforces tenant isolation. At the JPA layer we expose only regNo as the @Id
- * so that existing repository signatures (findById(Long), existsById(Long))
- * continue to work; RLS ensures the lookup only ever sees the current tenant.
- */
 @Entity
 @Table(name = "students")
 @Data
@@ -64,6 +58,10 @@ public class Student {
 
     @Column(name = "deactivation_date")
     private LocalDate deactivationDate;
+
+    /** NEW: actual last day the student used the library (may differ from deactivationDate) */
+    @Column(name = "last_active_date")
+    private LocalDate lastActiveDate;
 
     private String remarks;
 
