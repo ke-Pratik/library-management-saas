@@ -1,4 +1,5 @@
 import { Routes, Route, Navigate } from "react-router-dom";
+import { useState } from "react";
 import { ToastContainer } from "react-toastify";
 
 import Login          from "./pages/Login";
@@ -50,12 +51,17 @@ function RequireOnboarded({ children }) {
 }
 
 function AppLayout() {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
   return (
     <div className="d-flex flex-column min-vh-100">
-      <Navbar />
+      <Navbar onHamburgerClick={() => setMobileMenuOpen(true)} />
       <GracePeriodBanner />
-      <div className="d-flex flex-grow-1">
-        <Sidebar />
+      <div className="d-flex flex-grow-1 position-relative">
+        <Sidebar
+          mobileOpen={mobileMenuOpen}
+          onMobileClose={() => setMobileMenuOpen(false)}
+        />
         <main className="flex-grow-1 p-4 bg-light main-content">
           <Routes>
             <Route path="/"                  element={<Dashboard />} />
