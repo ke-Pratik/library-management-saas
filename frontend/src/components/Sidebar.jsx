@@ -106,13 +106,15 @@ function Sidebar() {
         >
           <FaLayerGroup className="me-2" /> Bulk Payment
         </NavLink>
+        {/* ── Hidden for initial release — restore later when ready ── */}
+       {/*
         <NavLink
           to="/receipt-search"
           className={({ isActive }) => (isActive ? "active" : "")}
         >
           <FaPrint className="me-2" /> Reprint Receipt
         </NavLink>
-
+        */}
         {/* ═══ REPORTS ═══ */}
         <div className="section-title">📊 Reports</div>
         <NavLink
