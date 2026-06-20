@@ -534,22 +534,23 @@ public class FeeService {
     BigDecimal totalCashReceived = currentCollected.add(oldDuesRecovered);
     BigDecimal totalOutstanding  = currentBalance.add(priorMonthDues);
 
-    return FeeCollectionResponse.builder()
-            .period(String.format("%02d/%d", month, year))
-            .totalStudents(records.size())
-            .paidCount((int)    records.stream().filter(r -> "PAID".equals(r.getPaymentStatus())).count())
-            .pendingCount((int) records.stream().filter(r -> "PENDING".equals(r.getPaymentStatus())).count())
-            .partialCount((int) records.stream().filter(r -> "PARTIAL".equals(r.getPaymentStatus())).count())
-            .totalFeeExpected(feeRecordRepository.sumFinalFeeByMonth(month, year))
-            .totalCollected(currentCollected)
-            .totalBalance(currentBalance)
-            .cashCollected(feeRecordRepository.sumPaidAmountByMonthAndMode(month, year, "CASH"))
-            .onlineCollected(feeRecordRepository.sumPaidAmountByMonthAndMode(month, year, "ONLINE"))
-            .oldDuesRecovered(oldDuesRecovered)
-            .totalCashReceived(totalCashReceived)
-            .priorMonthDues(priorMonthDues)
-            .totalOutstandingDues(totalOutstanding)
-            .build();
+   return FeeCollectionResponse.builder()
+        .period(String.format("%02d/%d", month, year))
+        .totalStudents(records.size())
+        .paidCount((int)    records.stream().filter(r -> "PAID".equals(r.getPaymentStatus())).count())
+        .pendingCount((int) records.stream().filter(r -> "PENDING".equals(r.getPaymentStatus())).count())
+        .partialCount((int) records.stream().filter(r -> "PARTIAL".equals(r.getPaymentStatus())).count())
+        .totalFeeExpected(feeRecordRepository.sumFinalFeeByMonth(month, year))
+        .totalCollected(currentCollected)
+        .totalBalance(currentBalance)
+        .cashCollected(feeRecordRepository.sumPaidAmountByMonthAndMode(month, year, "CASH"))
+        .onlineCollected(feeRecordRepository.sumPaidAmountByMonthAndMode(month, year, "ONLINE"))
+        .oldDuesRecovered(oldDuesRecovered)
+        .totalCashReceived(totalCashReceived)
+        .priorMonthDues(priorMonthDues)
+        .totalOutstandingDues(totalOutstanding)
+        .waivedThisMonth(feeRecordRepository.sumWaivedByMonth(month, year))   // ← NEW
+        .build();
 }
 
 public FeeCollectionResponse getCollectionByDateRange(LocalDate startDate, LocalDate endDate) {

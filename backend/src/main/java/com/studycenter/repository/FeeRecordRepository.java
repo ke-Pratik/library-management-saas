@@ -83,5 +83,11 @@ public interface FeeRecordRepository extends JpaRepository<FeeRecord, Long> {
     int deleteFutureRecordsByRegNo(@Param("regNo") Long regNo,
                                     @Param("month") int month,
                                     @Param("year") int year);
+    // Sum of amounts WAIVED in given month (status=PAID but finalFee > paid → gap is waiver)
+    @Query("SELECT COALESCE(SUM(f.finalFee - f.paidAmount), 0) FROM FeeRecord f " +
+           "WHERE f.feeMonth = :month AND f.feeYear = :year " +
+           "AND f.paymentStatus = 'PAID' " +
+           "AND f.finalFee > f.paidAmount")
+    BigDecimal sumWaivedByMonth(@Param("month") Integer month, @Param("year") Integer year);
 
 }

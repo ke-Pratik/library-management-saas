@@ -29,4 +29,5 @@ public class FeeCollectionResponse {
     // Outstanding view (active students, all months through current)
     private BigDecimal priorMonthDues;       // Backlog Pending: active students, months before current
     private BigDecimal totalOutstandingDues; // totalBalance + priorMonthDues
+    private BigDecimal waivedThisMonth;
 }

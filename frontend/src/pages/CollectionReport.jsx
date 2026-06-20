@@ -56,7 +56,7 @@ function CollectionReport() {
     );
   };
 
-  // Lower = better (green ▼) — used for Outstanding
+  // Lower = better (green ▼) — used for Outstanding and Waived
   const changeBadgeInverse = (curr, prev) => {
     if (prev == null || Number(prev) === 0) return null;
     const pct = (((curr - prev) / prev) * 100).toFixed(1);
@@ -82,6 +82,7 @@ function CollectionReport() {
         ["--- BILLING STATUS ---", "", ""],
         ["Total Fee Expected",    fmt(data.totalFeeExpected),   p ? fmt(p.totalFeeExpected)   : ""],
         ["Fee Collected",         fmt(data.totalCollected),     p ? fmt(p.totalCollected)     : ""],
+        ["Waived (write-offs)",   fmt(data.waivedThisMonth),    p ? fmt(p.waivedThisMonth)    : ""],
         ["Month Balance",         fmt(data.totalBalance),       p ? fmt(p.totalBalance)       : ""],
         ["Cash (Billing)",        fmt(data.cashCollected),      p ? fmt(p.cashCollected)      : ""],
         ["Online (Billing)",      fmt(data.onlineCollected),    p ? fmt(p.onlineCollected)    : ""],
@@ -261,6 +262,9 @@ function CollectionReport() {
                       <Row label="Fee Collected"
                            curr={data.totalCollected}   prev={prevData?.totalCollected}
                            className="table-success" />
+                      <Row label="💛 Waived (write-offs this month)"
+                           curr={data.waivedThisMonth}  prev={prevData?.waivedThisMonth}
+                           badge={changeBadgeInverse}   className="table-warning" />
                       <Row label="Month Balance"
                            curr={data.totalBalance}     prev={prevData?.totalBalance}
                            badge={changeBadgeInverse}   className="table-danger" />
@@ -334,7 +338,7 @@ function CollectionReport() {
               {prevData && (
                 <small className="text-muted">
                   ▲▼ Billing/Cash: higher is better &nbsp;|&nbsp;
-                  ▲▼ Outstanding: lower is better
+                  ▲▼ Outstanding/Waived: lower is better
                 </small>
               )}
             </>

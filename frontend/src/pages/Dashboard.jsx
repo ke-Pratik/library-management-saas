@@ -92,7 +92,7 @@ function Dashboard() {
   const [todayData,    setTodayData]    = useState({});
   const [monthlyTrend, setMonthlyTrend] = useState([]);
   const [subscription, setSubscription] = useState(null);
-  const [subDismissed, setSubDismissed] = useState(false);   // ← NEW
+  const [subDismissed, setSubDismissed] = useState(false);
   const [loading,      setLoading]      = useState(true);
 
   const fetchDashboard = async () => {
@@ -290,7 +290,8 @@ function Dashboard() {
               </h6>
               <div className="row g-3">
 
-                <div className="col-md-4">
+                {/* Billed */}
+                <div className="col-md-3">
                   <div className="p-3 rounded bg-light text-center">
                     <div className="text-muted small mb-1">Billed This Month</div>
                     <div className="fw-bold fs-5">₹{fmt(collection.totalFeeExpected)}</div>
@@ -300,7 +301,8 @@ function Dashboard() {
                   </div>
                 </div>
 
-                <div className="col-md-4">
+                {/* Cash Received */}
+                <div className="col-md-3">
                   <div className="p-3 rounded bg-light text-center">
                     <div className="text-muted small mb-1">Cash Received</div>
                     <div className="fw-bold fs-5 text-success">
@@ -314,7 +316,23 @@ function Dashboard() {
                   </div>
                 </div>
 
-                <div className="col-md-4">
+                {/* Waived (NEW) */}
+                <div className="col-md-3">
+                  <div className="p-3 rounded bg-light text-center">
+                    <div className="text-muted small mb-1">Waived</div>
+                    <div className={`fw-bold fs-5 ${Number(collection.waivedThisMonth || 0) > 0 ? "text-warning" : "text-success"}`}>
+                      ₹{fmt(collection.waivedThisMonth)}
+                    </div>
+                    {Number(collection.waivedThisMonth || 0) > 0 && (
+                      <div className="text-muted" style={{ fontSize: "11px" }}>
+                        write-offs this month
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Outstanding */}
+                <div className="col-md-3">
                   <div className="p-3 rounded bg-light text-center">
                     <div className="text-muted small mb-1">Total Outstanding</div>
                     <div className={`fw-bold fs-5 ${Number(collection.totalOutstandingDues || 0) > 0 ? "text-danger" : "text-success"}`}>
