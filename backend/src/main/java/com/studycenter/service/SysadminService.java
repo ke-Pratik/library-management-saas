@@ -162,12 +162,4 @@ public ResetPasswordResponse resetOwnerPassword(UUID tenantId, String newPasswor
             .username(owner.getUsername())
             .build();
 }
-
-    private String randomPassword(int len) {
-        String alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
-        SecureRandom rnd = new SecureRandom();
-        StringBuilder sb = new StringBuilder(len);
-        for (int i = 0; i < len; i++) sb.append(alphabet.charAt(rnd.nextInt(alphabet.length())));
-        return sb.toString();
-    }
 }
