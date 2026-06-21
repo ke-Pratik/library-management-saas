@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FaBook, FaUserCircle } from "react-icons/fa";
+import { FaBook, FaUserCircle, FaBars } from "react-icons/fa";
 import { useAuth } from "../context/AuthContext";
 import { getMySubscription } from "../services/api";
 
@@ -23,7 +23,7 @@ function statusChip(sub) {
   }
 }
 
-function Navbar() {
+function Navbar({ onHamburgerClick = () => {} }) {
   const navigate = useNavigate();
   const { username, role, logout } = useAuth();
   const [open, setOpen] = useState(false);
@@ -47,30 +47,34 @@ function Navbar() {
   }, []);
 
   const handleLogout = () => { logout(); navigate("/login"); };
-
-  const goProfile = () => {
-    setOpen(false);
-    navigate("/profile");
-  };
-
-  const goChip = () => {
-    navigate("/profile#subscription");
-  };
+  const goProfile    = () => { setOpen(false); navigate("/profile"); };
+  const goChip       = () => { navigate("/profile#subscription"); };
 
   const chip = statusChip(sub);
 
   return (
-    <nav className="navbar navbar-dark navbar-custom px-4">
-      <span className="navbar-brand d-flex align-items-center gap-2 fw-bold">
-        <FaBook size={22} />
-        📚 Study Center Management System
-      </span>
+    <nav className="navbar navbar-dark navbar-custom px-3 px-md-4 flex-nowrap">
+      <div className="d-flex align-items-center gap-2 navbar-left">
+        {/* Hamburger — visible only on mobile via CSS */}
+        <button
+          type="button"
+          className="hamburger-btn"
+          onClick={onHamburgerClick}
+          aria-label="Open menu"
+        >
+          <FaBars />
+        </button>
+        <span className="navbar-brand d-flex align-items-center gap-2 fw-bold mb-0 navbar-brand-truncate">
+          <FaBook size={20} />
+          <span className="d-none d-md-inline">📚 Study Center Management System</span>
+          <span className="d-inline d-md-none">📚 Study Center</span>
+        </span>
+      </div>
 
-      <div className="d-flex align-items-center gap-3" ref={menuRef}>
-        {/* Subscription status chip — clickable, jumps to subscription card */}
+      <div className="d-flex align-items-center gap-2 gap-md-3 flex-shrink-0" ref={menuRef}>
         {chip && (
           <span
-            className={`badge ${chip.bg} ${chip.text} px-3 py-2`}
+            className={`badge ${chip.bg} ${chip.text} chip-responsive d-none d-sm-inline-flex align-items-center`}
             style={{ cursor: "pointer", fontWeight: 500 }}
             onClick={goChip}
             title="View subscription details"
@@ -79,7 +83,6 @@ function Navbar() {
           </span>
         )}
 
-        {/* User dropdown — Profile + Logout only */}
         <div className="position-relative">
           <button
             className="btn btn-sm text-light d-flex align-items-center gap-2"
@@ -87,20 +90,19 @@ function Navbar() {
             onClick={() => setOpen((o) => !o)}
           >
             <FaUserCircle size={20} />
-            <span className="small">{username || "User"}</span>
+            <span className="small d-none d-md-inline">{username || "User"}</span>
             <span style={{ fontSize: 10 }}>▾</span>
           </button>
 
           {open && (
             <ul
-              className="dropdown-menu show shadow"
+              className="dropdown-menu show shadow user-dropdown-menu"
               style={{
                 position: "absolute",
                 top: "100%",
                 right: 0,
-                minWidth: "220px",
-                zIndex: 1055,
                 marginTop: 4,
+                zIndex: 1055,
               }}
             >
               <li className="px-3 py-2 border-bottom">
