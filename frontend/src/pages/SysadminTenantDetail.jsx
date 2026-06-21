@@ -41,9 +41,14 @@ function SysadminTenantDetail() {
   const [tenant, setTenant]     = useState(null);
   const [payments, setPayments] = useState([]);
   const [form, setForm]         = useState(EMPTY_FORM);
-  const [tempPassword, setTempPassword] = useState(null);
   const [msg, setMsg]           = useState("");
   const [err, setErr]           = useState("");
+
+  // ── Password reset state ──
+  const [resetForm, setResetForm]       = useState({ newPassword: "", confirm: "" });
+  const [resetMsg, setResetMsg]         = useState("");
+  const [resetErr, setResetErr]         = useState("");
+  const [showResetPwd, setShowResetPwd] = useState(false);
 
   const load = async () => {
     setErr("");
@@ -98,9 +103,21 @@ function SysadminTenantDetail() {
   };
 
   const resetPassword = async () => {
-    setTempPassword(null);
-    const res = await sysadminApi.post(`/tenants/${tenantId}/reset-password`);
-    setTempPassword(res.data.newTempPassword);
+    setResetMsg(""); setResetErr("");
+    const { newPassword, confirm } = resetForm;
+    if (!newPassword || newPassword.length < 6) {
+      setResetErr("Password must be at least 6 characters"); return;
+    }
+    if (newPassword !== confirm) {
+      setResetErr("Passwords do not match"); return;
+    }
+    try {
+      const res = await sysadminApi.post(`/tenants/${tenantId}/reset-password`, { newPassword });
+      setResetMsg(`✓ Password updated for "${res.data.username}". Share "${newPassword}" with the owner securely.`);
+      setResetForm({ newPassword: "", confirm: "" });
+    } catch (e) {
+      setResetErr(e.response?.data?.message || "Failed to reset password");
+    }
   };
 
   if (!tenant) {
@@ -304,18 +321,51 @@ function SysadminTenantDetail() {
       {/* ── Owner Password Reset ── */}
       <div className="card shadow-sm mb-4">
         <div className="card-body">
-          <h6 className="fw-bold mb-3">🔑 Owner Password</h6>
+          <h6 className="fw-bold mb-3">🔑 Reset Owner Password</h6>
           <p className="text-muted small">
-            Generates a new temporary password. Share with owner securely — it will not be shown again after closing this page.
+            Set a new password for the library owner. Share it with them securely (WhatsApp/phone).
+            Owner can change it themselves later via Profile → Change Password.
           </p>
-          <button className="btn btn-warning" onClick={resetPassword}>
-            Reset Owner Password
-          </button>
-          {tempPassword && (
-            <div className="alert alert-info mt-3 mb-0 small">
-              Temporary password: <code className="fs-6">{tempPassword}</code> — share with owner now.
+
+          {resetErr && <div className="alert alert-danger py-2 small">{resetErr}</div>}
+          {resetMsg && <div className="alert alert-success py-2 small">{resetMsg}</div>}
+
+          <div className="row g-3">
+            <div className="col-md-5">
+              <label className="form-label small fw-bold">New Password</label>
+              <div className="input-group">
+                <input
+                  type={showResetPwd ? "text" : "password"}
+                  className="form-control"
+                  placeholder="Min 6 characters"
+                  value={resetForm.newPassword}
+                  onChange={(e) => setResetForm({ ...resetForm, newPassword: e.target.value })}
+                />
+                <button
+                  type="button"
+                  className="btn btn-outline-secondary"
+                  onClick={() => setShowResetPwd((s) => !s)}
+                >
+                  {showResetPwd ? "Hide" : "Show"}
+                </button>
+              </div>
             </div>
-          )}
+            <div className="col-md-5">
+              <label className="form-label small fw-bold">Confirm Password</label>
+              <input
+                type={showResetPwd ? "text" : "password"}
+                className="form-control"
+                placeholder="Re-enter same password"
+                value={resetForm.confirm}
+                onChange={(e) => setResetForm({ ...resetForm, confirm: e.target.value })}
+              />
+            </div>
+            <div className="col-md-2 d-flex align-items-end">
+              <button className="btn btn-warning w-100" onClick={resetPassword}>
+                Update
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
