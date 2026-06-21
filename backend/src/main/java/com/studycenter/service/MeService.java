@@ -9,6 +9,7 @@ import com.studycenter.repository.UserRepository;
 import com.studycenter.dto.SubscriptionStatus;
 import com.studycenter.tenancy.TenantContext;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,6 +25,7 @@ public class MeService {
     private final TenantRepository tenantRepository;
     private final UserRepository userRepository;
     private final SubscriptionService subscriptionService;
+    private final PasswordEncoder passwordEncoder;   // ← NEW
 
     public MeProfileResponse getProfile() {
         UUID tenantId = TenantContext.requireTenantId();
@@ -74,5 +76,23 @@ public class MeService {
                 .graceEnds(snap.getEffectiveExpiryDate())
                 .graceDaysRemaining(graceDaysRemaining)
                 .build();
+    }
+
+    /** NEW: logged-in user updates their own password */
+    @Transactional
+    public void changePassword(String oldPassword, String newPassword) {
+        Long userId = TenantContext.getUserId();
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        if (!passwordEncoder.matches(oldPassword, user.getPassword())) {
+            throw new RuntimeException("Current password is incorrect");
+        }
+        if (passwordEncoder.matches(newPassword, user.getPassword())) {
+            throw new RuntimeException("New password must be different from current password");
+        }
+
+        user.setPassword(passwordEncoder.encode(newPassword));
+        userRepository.save(user);
     }
 }
