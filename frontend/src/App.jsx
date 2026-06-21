@@ -1,4 +1,5 @@
 import { Routes, Route, Navigate } from "react-router-dom";
+import { useEffect, useState } from "react";
 import { ToastContainer } from "react-toastify";
 
 import Login          from "./pages/Login";
@@ -12,6 +13,7 @@ import { useAuth } from "./context/AuthContext";
 
 import Navbar             from "./components/Navbar";
 import Sidebar            from "./components/Sidebar";
+import BottomNav          from "./components/BottomNav";
 import GracePeriodBanner  from "./components/GracePeriodBanner";
 import Dashboard          from "./pages/Dashboard";
 import StudentRegister    from "./pages/StudentRegister";
@@ -49,14 +51,33 @@ function RequireOnboarded({ children }) {
   return children;
 }
 
+/** Reactive isMobile hook — keeps toast/bottom nav in sync on resize/rotate */
+function useIsMobile(breakpoint = 768) {
+  const [isMobile, setIsMobile] = useState(
+    typeof window !== "undefined" ? window.innerWidth < breakpoint : false
+  );
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < breakpoint);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [breakpoint]);
+  return isMobile;
+}
+
 function AppLayout() {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const isMobile = useIsMobile();
+
   return (
-    <div className="d-flex flex-column min-vh-100">
-      <Navbar />
+    <div className="d-flex flex-column min-vh-100 app-shell">
+      <Navbar onHamburgerClick={() => setMobileMenuOpen(true)} />
       <GracePeriodBanner />
-      <div className="d-flex flex-grow-1">
-        <Sidebar />
-        <main className="flex-grow-1 p-4 bg-light main-content">
+      <div className="d-flex flex-grow-1 position-relative">
+        <Sidebar
+          mobileOpen={mobileMenuOpen}
+          onMobileClose={() => setMobileMenuOpen(false)}
+        />
+        <main className="flex-grow-1 p-3 p-md-4 bg-light main-content">
           <Routes>
             <Route path="/"                  element={<Dashboard />} />
             <Route path="/profile"           element={<Profile />} />
@@ -77,7 +98,14 @@ function AppLayout() {
           </Routes>
         </main>
       </div>
-      <ToastContainer position="top-right" autoClose={3000} />
+
+      {/* Mobile-only bottom navigation bar */}
+      <BottomNav onMoreClick={() => setMobileMenuOpen(true)} />
+
+      <ToastContainer
+        position={isMobile ? "bottom-center" : "top-right"}
+        autoClose={3000}
+      />
     </div>
   );
 }
