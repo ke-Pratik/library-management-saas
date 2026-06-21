@@ -1,17 +1,15 @@
 package com.studycenter.controller;
 
+import com.studycenter.dto.ChangePasswordRequest;
 import com.studycenter.dto.MeProfileResponse;
 import com.studycenter.dto.MeSubscriptionResponse;
 import com.studycenter.service.MeService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
-/**
- * Self-service endpoints for the currently logged-in tenant user.
- * Auto-protected by the TenantJwtFilter — no SecurityConfig change needed.
- */
+import java.util.Map;
+
 @RestController
 @RequestMapping("/api/me")
 @RequiredArgsConstructor
@@ -27,5 +25,12 @@ public class MeController {
     @GetMapping("/subscription")
     public MeSubscriptionResponse getSubscription() {
         return meService.getSubscription();
+    }
+
+    /** NEW: logged-in user changes their own password */
+    @PostMapping("/change-password")
+    public Map<String, String> changePassword(@Valid @RequestBody ChangePasswordRequest req) {
+        meService.changePassword(req.getOldPassword(), req.getNewPassword());
+        return Map.of("message", "Password updated successfully");
     }
 }

@@ -19,8 +19,6 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.security.SecureRandom;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
@@ -150,24 +148,18 @@ public class SysadminService {
         return tenantPaymentRepository.findByTenantIdOrderByPaidOnDesc(tenantId);
     }
 
-    @Transactional
-    public ResetPasswordResponse resetOwnerPassword(UUID tenantId) {
-        bindTenant(tenantId);
-        User owner = userRepository.findFirstByTenantIdAndRole(tenantId, "OWNER")
-                .orElseThrow(() -> new RuntimeException("Owner not found for tenant"));
+@Transactional
+public ResetPasswordResponse resetOwnerPassword(UUID tenantId, String newPassword) {
+    bindTenant(tenantId);
+    User owner = userRepository.findFirstByTenantIdAndRole(tenantId, "OWNER")
+            .orElseThrow(() -> new RuntimeException("Owner not found for tenant"));
 
-        String temp = randomPassword(10);
-        owner.setPassword(passwordEncoder.encode(temp));
-        userRepository.save(owner);
+    owner.setPassword(passwordEncoder.encode(newPassword));
+    userRepository.save(owner);
 
-        return ResetPasswordResponse.builder().newTempPassword(temp).build();
-    }
-
-    private String randomPassword(int len) {
-        String alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
-        SecureRandom rnd = new SecureRandom();
-        StringBuilder sb = new StringBuilder(len);
-        for (int i = 0; i < len; i++) sb.append(alphabet.charAt(rnd.nextInt(alphabet.length())));
-        return sb.toString();
-    }
+    return ResetPasswordResponse.builder()
+            .message("Password updated successfully")
+            .username(owner.getUsername())
+            .build();
+}
 }
