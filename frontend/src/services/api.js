@@ -92,6 +92,7 @@ export const changeSeat = (data) => API.put("/seats/change", data);
 // ═══════════════════════════════════════════
 export const getMyProfile      = () => API.get("/me");
 export const getMySubscription = () => API.get("/me/subscription");
+export const changeMyPassword  = (data) => API.post("/me/change-password", data); 
 
 // ═══════════════════════════════════════════
 // SYSADMIN API (separate token)
