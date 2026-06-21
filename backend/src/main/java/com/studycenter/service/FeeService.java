@@ -64,6 +64,8 @@ import com.studycenter.repository.PaymentAllocationRepository;
 import com.studycenter.repository.TenantSeatZoneRepository;
 import com.studycenter.entity.TenantSeatZone;
 import com.studycenter.dto.ReviseFeePreviewResponse;
+import com.studycenter.entity.FeePaymentHistory;
+import com.studycenter.repository.FeePaymentHistoryRepository;
 
 @Service
 @RequiredArgsConstructor
@@ -82,6 +84,7 @@ public class FeeService {
     private final PaymentAllocationRepository paymentAllocationRepository;
     private final TenantSettingsRepository tenantSettingsRepository;
     private final TenantSeatZoneRepository tenantSeatZoneRepository;
+    private final FeePaymentHistoryRepository feePaymentHistoryRepository;
 
     private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("HH:mm");
     private static final int TOTAL_SEATS = 65;
@@ -390,6 +393,17 @@ public class FeeService {
         if (request.getRemarks() != null) record.setRemarks(request.getRemarks());
         feeRecordRepository.save(record);
 
+        feePaymentHistoryRepository.save(FeePaymentHistory.builder()
+        .feeId(record.getFeeId())
+        .regNo(record.getRegNo())
+        .amount(payAmount)
+        .paymentMode(mode)
+        .paymentDate(record.getPaymentDate())
+        .receiptNumber(receipt)
+        .remarks(request.getRemarks())
+        .source("PAYMENT")
+        .build());
+
         return FeePaymentResponse.builder()
                 .message("Payment recorded successfully!")
                 .feeId(record.getFeeId()).regNo(record.getRegNo()).studentName(student.getName())
@@ -524,53 +538,60 @@ public class FeeService {
     // ═══════════════════════════════════════════════════════════════════
     // MONTHLY + DATE-RANGE COLLECTION
     // ═══════════════════════════════════════════════════════════════════
+
     public FeeCollectionResponse getMonthlyCollection(Integer month, Integer year) {
     List<FeeRecord> records = feeRecordRepository.findByFeeMonthAndFeeYear(month, year);
 
-    BigDecimal currentCollected  = feeRecordRepository.sumPaidAmountByMonth(month, year);
+    // ── FIXED: Use payment history for accurate cash flow ──
+    BigDecimal currentCollected  = feePaymentHistoryRepository.sumPaymentsForBillMonth(month, year);
     BigDecimal currentBalance    = feeRecordRepository.sumBalanceByMonth(month, year);
-    BigDecimal oldDuesRecovered  = feeRecordRepository.sumOldDuesRecoveredInMonth(month, year);
+    BigDecimal oldDuesRecovered  = feePaymentHistoryRepository.sumBacklogCollectedInMonth(month, year);
     BigDecimal priorMonthDues    = feeRecordRepository.sumActiveOutstandingBeforeMonth(month, year);
     BigDecimal totalCashReceived = currentCollected.add(oldDuesRecovered);
     BigDecimal totalOutstanding  = currentBalance.add(priorMonthDues);
 
-   return FeeCollectionResponse.builder()
-        .period(String.format("%02d/%d", month, year))
-        .totalStudents(records.size())
-        .paidCount((int)    records.stream().filter(r -> "PAID".equals(r.getPaymentStatus())).count())
-        .pendingCount((int) records.stream().filter(r -> "PENDING".equals(r.getPaymentStatus())).count())
-        .partialCount((int) records.stream().filter(r -> "PARTIAL".equals(r.getPaymentStatus())).count())
-        .totalFeeExpected(feeRecordRepository.sumFinalFeeByMonth(month, year))
-        .totalCollected(currentCollected)
-        .totalBalance(currentBalance)
-        .cashCollected(feeRecordRepository.sumPaidAmountByMonthAndMode(month, year, "CASH"))
-        .onlineCollected(feeRecordRepository.sumPaidAmountByMonthAndMode(month, year, "ONLINE"))
-        .oldDuesRecovered(oldDuesRecovered)
-        .totalCashReceived(totalCashReceived)
-        .priorMonthDues(priorMonthDues)
-        .totalOutstandingDues(totalOutstanding)
-        .waivedThisMonth(feeRecordRepository.sumWaivedByMonth(month, year))   // ← NEW
-        .build();
+    return FeeCollectionResponse.builder()
+            .period(String.format("%02d/%d", month, year))
+            .totalStudents(records.size())
+            .paidCount((int)    records.stream().filter(r -> "PAID".equals(r.getPaymentStatus())).count())
+            .pendingCount((int) records.stream().filter(r -> "PENDING".equals(r.getPaymentStatus())).count())
+            .partialCount((int) records.stream().filter(r -> "PARTIAL".equals(r.getPaymentStatus())).count())
+            .totalFeeExpected(feeRecordRepository.sumFinalFeeByMonth(month, year))
+            .totalCollected(currentCollected)
+            .totalBalance(currentBalance)
+            // ── FIXED: Cash/Online split using history ──
+            .cashCollected(feePaymentHistoryRepository.sumPaymentsForBillMonthAndMode(month, year, "CASH"))
+            .onlineCollected(feePaymentHistoryRepository.sumPaymentsForBillMonthAndMode(month, year, "ONLINE"))
+            .oldDuesRecovered(oldDuesRecovered)
+            .totalCashReceived(totalCashReceived)
+            .priorMonthDues(priorMonthDues)
+            .totalOutstandingDues(totalOutstanding)
+            .waivedThisMonth(feeRecordRepository.sumWaivedByMonth(month, year))
+            .build();
 }
 
 public FeeCollectionResponse getCollectionByDateRange(LocalDate startDate, LocalDate endDate) {
     if (startDate.isAfter(endDate))
         throw new InvalidRequestException("startDate must be before endDate");
 
-    List<FeeRecord> records = feeRecordRepository.findByPaymentDateBetween(startDate, endDate);
-    BigDecimal totalCash = feeRecordRepository.sumPaidAmountByDateRange(startDate, endDate);
+    // ── FIXED: All metrics now from payment history ──
+    BigDecimal totalCash   = feePaymentHistoryRepository.sumAmountByDateRange(startDate, endDate);
+    BigDecimal cashAmount  = feePaymentHistoryRepository.sumAmountByDateRangeAndMode(startDate, endDate, "CASH");
+    BigDecimal onlineAmt   = feePaymentHistoryRepository.sumAmountByDateRangeAndMode(startDate, endDate, "ONLINE");
+    long       paymentCount = feePaymentHistoryRepository.countByDateRange(startDate, endDate);
+    long       distinctStudents = feePaymentHistoryRepository.countDistinctStudentsByDateRange(startDate, endDate);
 
     return FeeCollectionResponse.builder()
             .period(startDate + " to " + endDate)
-            .totalStudents((int) records.stream().map(FeeRecord::getRegNo).distinct().count())
-            .paidCount((int)    records.stream().filter(r -> "PAID".equals(r.getPaymentStatus())).count())
+            .totalStudents((int) distinctStudents)
+            .paidCount((int) paymentCount)   // # of payment events in range
             .pendingCount(0)
-            .partialCount((int) records.stream().filter(r -> "PARTIAL".equals(r.getPaymentStatus())).count())
+            .partialCount(0)
             .totalFeeExpected(BigDecimal.ZERO)
             .totalCollected(totalCash)
             .totalBalance(BigDecimal.ZERO)
-            .cashCollected(feeRecordRepository.sumPaidAmountByDateRangeAndMode(startDate, endDate, "CASH"))
-            .onlineCollected(feeRecordRepository.sumPaidAmountByDateRangeAndMode(startDate, endDate, "ONLINE"))
+            .cashCollected(cashAmount)
+            .onlineCollected(onlineAmt)
             .oldDuesRecovered(BigDecimal.ZERO)
             .totalCashReceived(totalCash)
             .priorMonthDues(BigDecimal.ZERO)
@@ -694,6 +715,16 @@ public FeeCollectionResponse getCollectionByDateRange(LocalDate startDate, Local
 
             totalCollected = totalCollected.add(payAmount);
 
+            feePaymentHistoryRepository.save(FeePaymentHistory.builder()
+                .feeId(record.getFeeId())
+                .regNo(item.getRegNo())
+                .amount(payAmount)
+                .paymentMode(mode)
+                .paymentDate(record.getPaymentDate())
+                .receiptNumber(receipt)
+                .source("BULK")
+                .build());
+            
             results.add(BulkPaymentResponse.PaymentResult.builder()
                     .regNo(item.getRegNo()).studentName(student.getName())
                     .amountPaid(payAmount).balanceRemaining(newBalance)
@@ -737,7 +768,7 @@ public FeeCollectionResponse getCollectionByDateRange(LocalDate startDate, Local
         record.setReceiptNumber(null);
         record.setRemarks(remarks != null ? "REVERSED: " + remarks : "REVERSED by admin");
         feeRecordRepository.save(record);
-
+        feePaymentHistoryRepository.deleteByFeeId(feeId);
         log.info("Payment reversed: feeId={}, regNo={}, amount={}", feeId, record.getRegNo(), reversedAmount);
 
         return ReversePaymentResponse.builder()
@@ -1320,6 +1351,18 @@ public AdvancePaymentResponse recordAdvancePayment(AdvancePaymentRequest req) {
         fr.setReceiptNumber(receipt);
         if (req.getRemarks() != null) fr.setRemarks(req.getRemarks());
         feeRecordRepository.save(fr);
+
+        // ── NEW: Log per-payment history ──
+        feePaymentHistoryRepository.save(FeePaymentHistory.builder()
+                .feeId(fr.getFeeId())
+                .regNo(req.getRegNo())
+                .amount(toAllocate)
+                .paymentMode(mode)
+                .paymentDate(LocalDate.now())
+                .receiptNumber(receipt)
+                .remarks(req.getRemarks())
+                .source("ADVANCE")
+                .build());
 
         paymentAllocationRepository.save(PaymentAllocation.builder()
             .paymentId(paymentId).feeId(fr.getFeeId())
