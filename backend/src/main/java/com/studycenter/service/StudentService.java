@@ -42,6 +42,8 @@ import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.UUID;
+import com.studycenter.entity.FeePaymentHistory;
+import com.studycenter.repository.FeePaymentHistoryRepository;
 
 @Service
 @RequiredArgsConstructor
@@ -55,6 +57,7 @@ public class StudentService {
     private final JdbcTemplate          jdbc;
     private final FeeRecordRepository feeRecordRepository;
     private final WalletService walletService;
+    private final FeePaymentHistoryRepository feePaymentHistoryRepository;
 
     private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("HH:mm");
 
@@ -364,19 +367,30 @@ public DeactivateReactivateResponse deactivateStudent(DeactivateReactivateReques
                     // Still owes → handle based on balanceAction
                     String balanceAction = request.getBalanceAction() != null ? request.getBalanceAction() : "WAIVE";
 
-                    if ("COLLECT".equalsIgnoreCase(balanceAction)) {
-                        // Record payment
+                  if ("COLLECT".equalsIgnoreCase(balanceAction)) {
                         String mode = request.getCollectMode() != null ? request.getCollectMode().toUpperCase() : "CASH";
                         if (!"CASH".equals(mode) && !"ONLINE".equals(mode)) mode = "CASH";
-
+                    
                         BigDecimal newPaid = paid.add(newBalance);
                         receiptNumber = generateDeactivationReceipt(month, year);
                         fr.setPaidAmount(newPaid);
                         amountCollected = newBalance;
-                        newBalance = BigDecimal.ZERO;
                         fr.setPaymentMode(mode);
                         fr.setPaymentDate(today);
                         fr.setReceiptNumber(receiptNumber);
+                    
+                        // ── NEW: Log per-payment history ──
+                        feePaymentHistoryRepository.save(FeePaymentHistory.builder()
+                                .feeId(fr.getFeeId())
+                                .regNo(request.getRegNo())
+                                .amount(newBalance)         // amount being collected NOW (before zeroing)
+                                .paymentMode(mode)
+                                .paymentDate(today)
+                                .receiptNumber(receiptNumber)
+                                .source("DEACTIVATION")
+                                .build());
+                    
+                        newBalance = BigDecimal.ZERO;
                     } else {
                         // WAIVE the remaining balance
                         amountWaived = newBalance;
