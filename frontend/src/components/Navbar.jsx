@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FaBook, FaUserCircle, FaBars } from "react-icons/fa";
+import { FaBook, FaUserCircle, FaBars, FaUser, FaSignOutAlt } from "react-icons/fa";
 import { useAuth } from "../context/AuthContext";
 import { getMySubscription } from "../services/api";
 
@@ -110,17 +110,20 @@ function Navbar({ onHamburgerClick = () => {} }) {
                 <div className="small text-muted">{role || "—"}</div>
               </li>
               <li>
-                <button className="dropdown-item" onClick={goProfile}>
-                  👁  My Profile
+                <button
+                  className="dropdown-item d-flex align-items-center gap-2"
+                  onClick={goProfile}
+                >
+                  <FaUser /> My Profile
                 </button>
               </li>
               <li><hr className="dropdown-divider" /></li>
               <li>
                 <button
-                  className="dropdown-item text-danger"
+                  className="dropdown-item text-danger d-flex align-items-center gap-2"
                   onClick={() => { setOpen(false); handleLogout(); }}
                 >
-                  🚪  Logout
+                  <FaSignOutAlt /> Logout
                 </button>
               </li>
             </ul>
