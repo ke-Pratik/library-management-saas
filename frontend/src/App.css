@@ -29,9 +29,30 @@
   color: #fff !important;
 }
 
-.navbar-custom .btn,
-.navbar-custom button {
+/* White text for nav-level buttons — but NOT dropdown items inside menus */
+.navbar-custom > .btn,
+.navbar-custom > button,
+.navbar-custom .navbar-left button,
+.navbar-custom .navbar-left .btn,
+.navbar-custom > div > .position-relative > button {
   color: #fff;
+}
+
+/* Dropdown items keep their normal dark color (visible on white menu) */
+.navbar-custom .dropdown-menu .dropdown-item {
+  color: #212529;
+}
+.navbar-custom .dropdown-menu .dropdown-item:hover,
+.navbar-custom .dropdown-menu .dropdown-item:focus {
+  background-color: #f8f9fa;
+  color: #212529;
+}
+.navbar-custom .dropdown-menu .dropdown-item.text-danger {
+  color: #dc3545 !important;
+}
+.navbar-custom .dropdown-menu .dropdown-item.text-danger:hover {
+  background-color: #f8d7da;
+  color: #dc3545 !important;
 }
 
 /* ── Sidebar (desktop default) ── */
