@@ -1,4 +1,93 @@
 /* ═══════════════════════════════════════════════════ */
+/* App Shell — Base Styles (Navbar / Sidebar / Layout) */
+/* ═══════════════════════════════════════════════════ */
+
+/* Root layout */
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: #f5f6f8;
+}
+
+.app-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+/* ── Navbar ── */
+.navbar-custom {
+  background-color: #1f2937 !important;
+  color: #fff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  min-height: 56px;
+}
+
+.navbar-custom .navbar-brand,
+.navbar-custom .navbar-brand * {
+  color: #fff !important;
+}
+
+.navbar-custom .btn,
+.navbar-custom button {
+  color: #fff;
+}
+
+/* ── Sidebar (desktop default) ── */
+.sidebar {
+  width: 240px;
+  min-width: 240px;
+  background-color: #1f2937;
+  color: #d1d5db;
+  padding: 12px 0;
+  overflow-y: auto;
+  max-height: calc(100vh - 56px);
+}
+
+.sidebar a {
+  display: flex;
+  align-items: center;
+  padding: 10px 18px;
+  color: #d1d5db;
+  text-decoration: none;
+  font-size: 14px;
+  border-left: 3px solid transparent;
+  transition: background 0.15s, color 0.15s;
+}
+
+.sidebar a:hover {
+  background: #374151;
+  color: #fff;
+}
+
+.sidebar a.active {
+  background: #374151;
+  color: #fff;
+  border-left-color: #60a5fa;
+  font-weight: 500;
+}
+
+.sidebar .section-title {
+  padding: 14px 18px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+/* ── Main content area ── */
+.main-content {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 20px;
+  background: #f5f6f8;
+  overflow-y: auto;
+  max-height: calc(100vh - 56px);
+}
+
+/* ═══════════════════════════════════════════════════ */
 /* Mobile Responsive Layout                            */
 /* ═══════════════════════════════════════════════════ */
 
@@ -8,8 +97,8 @@
   background: transparent;
   border: none;
   color: #fff;
-  font-size: 20px;
-  padding: 4px 8px;
+  font-size: 22px;
+  padding: 6px 10px;
   cursor: pointer;
 }
 
@@ -49,6 +138,7 @@
     min-height: 56px;
     padding-top: 4px !important;
     padding-bottom: 4px !important;
+    background-color: #1f2937 !important;
   }
 
   .navbar-custom .navbar-brand {
@@ -57,26 +147,44 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    color: #fff !important;
   }
 
   /* ── Sidebar becomes slide-in drawer ── */
   .sidebar {
     position: fixed;
     top: 56px;
-    left: -280px;
-    width: 260px;
+    left: -290px;
+    width: 270px;
+    min-width: 270px;
     height: calc(100vh - 56px);
+    max-height: calc(100vh - 56px);
+    background-color: #1f2937 !important;  /* solid — prevents bleed-through */
+    color: #d1d5db;
     z-index: 1050;
-    box-shadow: 2px 0 12px rgba(0, 0, 0, 0.4);
+    box-shadow: 2px 0 16px rgba(0, 0, 0, 0.5);
     transition: left 0.3s ease;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 80px;  /* room for logout button above bottom nav */
   }
 
   .sidebar.mobile-open { left: 0; }
 
+  /* Force every sidebar link to its own line, full width */
+  .sidebar a {
+    display: flex !important;
+    width: 100%;
+    padding: 12px 18px;
+    font-size: 15px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  }
+
   .hamburger-btn {
-    display: inline-flex;
+    display: inline-flex !important;
     align-items: center;
     justify-content: center;
+    color: #fff !important;
   }
 
   .sidebar-close-btn {
@@ -100,8 +208,7 @@
   .main-content {
     width: 100%;
     max-height: none;
-    /* Leave room for bottom nav bar */
-    padding-bottom: 80px !important;
+    padding-bottom: 80px !important;  /* room for bottom nav */
   }
 
   /* Subscription chip more compact */
